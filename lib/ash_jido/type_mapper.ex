@@ -120,11 +120,12 @@ defmodule AshJido.TypeMapper do
   defp enhance_documentation(description, field_config, type) do
     type_hint = get_type_hint(type)
     required_hint = get_required_hint(field_config)
-    
-    parts = [description, type_hint, required_hint]
-    |> Enum.reject(&(&1 == ""))
-    |> Enum.join(" - ")
-    
+
+    parts =
+      [description, type_hint, required_hint]
+      |> Enum.reject(&(&1 == ""))
+      |> Enum.join(" - ")
+
     parts
   end
 
@@ -133,11 +134,12 @@ defmodule AshJido.TypeMapper do
     base_doc = humanize_field_name(name)
     type_hint = get_type_hint(type)
     required_hint = get_required_hint(field_config)
-    
-    parts = [base_doc, type_hint, required_hint]
-    |> Enum.reject(&(&1 == ""))
-    |> Enum.join(" - ")
-    
+
+    parts =
+      [base_doc, type_hint, required_hint]
+      |> Enum.reject(&(&1 == ""))
+      |> Enum.join(" - ")
+
     parts
   end
 

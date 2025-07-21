@@ -24,6 +24,7 @@ defmodule AshJido.IntegrationTest do
 
       # Verify jido entities were parsed
       jido_entities = Spark.Dsl.Extension.get_entities(dsl_state, [:jido])
+
       # action :register, action :by_email, action :read, action :update_age, action :destroy, action :archive, action :deactivate
       assert length(jido_entities) == 7
 
@@ -64,7 +65,8 @@ defmodule AshJido.IntegrationTest do
     test "generated modules have correct metadata" do
       # Test User.Jido.Register module
       register_module = User.Jido.Register
-      assert register_module.name() == "create_user"  # Uses new smart naming
+      # Uses new smart naming
+      assert register_module.name() == "create_user"
 
       schema = register_module.schema()
       assert is_list(schema)

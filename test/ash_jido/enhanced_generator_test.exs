@@ -2,7 +2,7 @@ defmodule AshJido.EnhancedGeneratorTest do
   @moduledoc """
   Tests for enhanced generator support of update, destroy, and generic actions.
   """
-  
+
   use ExUnit.Case, async: true
 
   @moduletag :capture_log
@@ -10,6 +10,7 @@ defmodule AshJido.EnhancedGeneratorTest do
   describe "Enhanced Action Support" do
     test "generates module for update action with correct schema" do
       dsl_state = AshJido.Test.User.spark_dsl_config()
+
       jido_action = %AshJido.Resource.JidoAction{
         action: :update_age,
         name: "update_user_age",
@@ -18,18 +19,19 @@ defmodule AshJido.EnhancedGeneratorTest do
         output_map?: true
       }
 
-      module_name = AshJido.Generator.generate_jido_action_module(AshJido.Test.User, jido_action, dsl_state)
-      
+      module_name =
+        AshJido.Generator.generate_jido_action_module(AshJido.Test.User, jido_action, dsl_state)
+
       # Check the generated module exists
       assert Code.ensure_loaded?(module_name)
-      
+
       # Check it has the correct schema (should include id + action arguments)
       schema = module_name.schema()
       schema_keys = Keyword.keys(schema)
-      
+
       assert :id in schema_keys
       assert :age in schema_keys
-      
+
       # Check id is required
       id_config = Keyword.get(schema, :id)
       assert id_config[:required] == true
@@ -37,6 +39,7 @@ defmodule AshJido.EnhancedGeneratorTest do
 
     test "generates module for destroy action with correct schema" do
       dsl_state = AshJido.Test.User.spark_dsl_config()
+
       jido_action = %AshJido.Resource.JidoAction{
         action: :destroy,
         name: "delete_user",
@@ -45,17 +48,18 @@ defmodule AshJido.EnhancedGeneratorTest do
         output_map?: true
       }
 
-      module_name = AshJido.Generator.generate_jido_action_module(AshJido.Test.User, jido_action, dsl_state)
-      
+      module_name =
+        AshJido.Generator.generate_jido_action_module(AshJido.Test.User, jido_action, dsl_state)
+
       # Check the generated module exists
       assert Code.ensure_loaded?(module_name)
-      
+
       # Check it has the correct schema (should just have id)
       schema = module_name.schema()
       schema_keys = Keyword.keys(schema)
-      
+
       assert :id in schema_keys
-      
+
       # Check id is required
       id_config = Keyword.get(schema, :id)
       assert id_config[:required] == true
@@ -63,6 +67,7 @@ defmodule AshJido.EnhancedGeneratorTest do
 
     test "generates module for custom destroy action" do
       dsl_state = AshJido.Test.User.spark_dsl_config()
+
       jido_action = %AshJido.Resource.JidoAction{
         action: :archive,
         name: "archive_user",
@@ -71,20 +76,22 @@ defmodule AshJido.EnhancedGeneratorTest do
         output_map?: true
       }
 
-      module_name = AshJido.Generator.generate_jido_action_module(AshJido.Test.User, jido_action, dsl_state)
-      
+      module_name =
+        AshJido.Generator.generate_jido_action_module(AshJido.Test.User, jido_action, dsl_state)
+
       # Check the generated module exists
       assert Code.ensure_loaded?(module_name)
-      
+
       # Check it has the correct schema (should just have id for destroy action)
       schema = module_name.schema()
       schema_keys = Keyword.keys(schema)
-      
+
       assert :id in schema_keys
     end
 
     test "generates module for generic action with correct schema" do
       dsl_state = AshJido.Test.User.spark_dsl_config()
+
       jido_action = %AshJido.Resource.JidoAction{
         action: :deactivate,
         name: "deactivate_user",
@@ -93,20 +100,22 @@ defmodule AshJido.EnhancedGeneratorTest do
         output_map?: true
       }
 
-      module_name = AshJido.Generator.generate_jido_action_module(AshJido.Test.User, jido_action, dsl_state)
-      
+      module_name =
+        AshJido.Generator.generate_jido_action_module(AshJido.Test.User, jido_action, dsl_state)
+
       # Check the generated module exists
       assert Code.ensure_loaded?(module_name)
-      
+
       # Check it has the correct schema (should include action arguments)
       schema = module_name.schema()
       schema_keys = Keyword.keys(schema)
-      
+
       assert :reason in schema_keys
     end
 
     test "update action properly handles missing id parameter" do
       dsl_state = AshJido.Test.User.spark_dsl_config()
+
       jido_action = %AshJido.Resource.JidoAction{
         action: :update_age,
         name: "update_user_age_test",
@@ -115,8 +124,9 @@ defmodule AshJido.EnhancedGeneratorTest do
         output_map?: true
       }
 
-      module_name = AshJido.Generator.generate_jido_action_module(AshJido.Test.User, jido_action, dsl_state)
-      
+      module_name =
+        AshJido.Generator.generate_jido_action_module(AshJido.Test.User, jido_action, dsl_state)
+
       # Running without id should return proper error
       {:error, jido_error} = module_name.run(%{age: 25}, %{domain: AshJido.Test.Domain})
       assert jido_error.message == "Update actions require an 'id' parameter"
@@ -124,6 +134,7 @@ defmodule AshJido.EnhancedGeneratorTest do
 
     test "destroy action properly handles missing id parameter" do
       dsl_state = AshJido.Test.User.spark_dsl_config()
+
       jido_action = %AshJido.Resource.JidoAction{
         action: :destroy,
         name: "destroy_user_test",
@@ -132,8 +143,9 @@ defmodule AshJido.EnhancedGeneratorTest do
         output_map?: true
       }
 
-      module_name = AshJido.Generator.generate_jido_action_module(AshJido.Test.User, jido_action, dsl_state)
-      
+      module_name =
+        AshJido.Generator.generate_jido_action_module(AshJido.Test.User, jido_action, dsl_state)
+
       # Running without id should return proper error
       {:error, jido_error} = module_name.run(%{}, %{domain: AshJido.Test.Domain})
       assert jido_error.message == "Destroy actions require an 'id' parameter"
@@ -141,6 +153,7 @@ defmodule AshJido.EnhancedGeneratorTest do
 
     test "read action with arguments generates correct schema" do
       dsl_state = AshJido.Test.User.spark_dsl_config()
+
       jido_action = %AshJido.Resource.JidoAction{
         action: :by_email,
         name: "find_user_by_email",
@@ -149,18 +162,19 @@ defmodule AshJido.EnhancedGeneratorTest do
         output_map?: true
       }
 
-      module_name = AshJido.Generator.generate_jido_action_module(AshJido.Test.User, jido_action, dsl_state)
-      
+      module_name =
+        AshJido.Generator.generate_jido_action_module(AshJido.Test.User, jido_action, dsl_state)
+
       # Check the generated module exists
       assert Code.ensure_loaded?(module_name)
-      
+
       # Check it has the correct schema (action arguments + read params)
       schema = module_name.schema()
       schema_keys = Keyword.keys(schema)
-      
+
       # Should have action-specific argument
       assert :email in schema_keys
-      
+
       # Should also have common read parameters
       assert :id in schema_keys
       assert :limit in schema_keys

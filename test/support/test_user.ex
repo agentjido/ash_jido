@@ -59,6 +59,7 @@ defmodule AshJido.Test.User do
     action :deactivate do
       description("Deactivate a user account")
       argument(:reason, :string)
+
       run(fn input, context ->
         # This would be a custom implementation
         {:ok, %{message: "User deactivated", reason: input.arguments.reason}}
@@ -68,7 +69,7 @@ defmodule AshJido.Test.User do
 
   jido do
     action(:register)
-    
+
     action(:by_email,
       name: "find_user_by_email",
       description: "Find a user by their email address"

@@ -23,7 +23,7 @@ defmodule AshJidoTest do
       # Verify that AshJido implements the Spark.Dsl.Extension behavior properly
       assert Code.ensure_loaded?(AshJido)
       assert function_exported?(AshJido, :explain, 2)
-      
+
       # Check that it has the required extension metadata
       extension_module = AshJido
       assert is_atom(extension_module)
@@ -57,18 +57,18 @@ defmodule AshJidoTest do
       end
 
       jido do
-        action :create
-        action :read
+        action(:create)
+        action(:read)
       end
     end
 
     test "resource with AshJido extension compiles successfully" do
       # This test verifies that the extension doesn't break Ash compilation
       assert Code.ensure_loaded?(IntegrationTestResource)
-      
+
       # Verify it's a valid Ash resource
       assert function_exported?(IntegrationTestResource, :spark_dsl_config, 0)
-      
+
       # Verify our extension is included
       dsl_state = IntegrationTestResource.spark_dsl_config()
       extensions = Spark.Dsl.Extension.get_persisted(dsl_state, :extensions)
@@ -81,7 +81,7 @@ defmodule AshJidoTest do
         IntegrationTestResource.Jido.Create,
         IntegrationTestResource.Jido.Read
       ]
-      
+
       for module <- expected_modules do
         assert Code.ensure_loaded?(module), "Expected module #{inspect(module)} to be generated"
         assert function_exported?(module, :run, 2)

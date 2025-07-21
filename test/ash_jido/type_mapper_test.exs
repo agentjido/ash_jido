@@ -1,15 +1,15 @@
 defmodule AshJido.TypeMapperTest do
   @moduledoc """
   Tests for AshJido.TypeMapper module.
-  
+
   Tests the conversion of Ash types to NimbleOptions types,
   which is critical for generating correct parameter schemas.
   """
-  
+
   use ExUnit.Case, async: true
-  
+
   @moduletag :capture_log
-  
+
   alias AshJido.TypeMapper
 
   describe "ash_type_to_nimble_options/2" do
@@ -76,7 +76,9 @@ defmodule AshJido.TypeMapperTest do
       assert result[:type] == {:list, :string}
 
       # Array of integers
-      result = TypeMapper.ash_type_to_nimble_options({:array, Ash.Type.Integer}, %{allow_nil?: false})
+      result =
+        TypeMapper.ash_type_to_nimble_options({:array, Ash.Type.Integer}, %{allow_nil?: false})
+
       assert result[:type] == {:list, :integer}
       assert result[:required] == true
 
@@ -97,21 +99,21 @@ defmodule AshJido.TypeMapperTest do
       # Create a custom type that has a storage_type returning Ash.Type.String
       defmodule CustomStringType do
         @behaviour Ash.Type
-        
+
         def storage_type, do: Ash.Type.String
         def cast_input(value, _), do: {:ok, value}
         def cast_stored(value, _), do: {:ok, value}
         def dump_to_embedded(value, _), do: {:ok, value}
         def dump_to_native(value, _), do: {:ok, value}
       end
-      
+
       result = TypeMapper.ash_type_to_nimble_options(CustomStringType, %{})
       assert result[:type] == :string
     end
 
     test "includes description when provided" do
       options = %{description: "User's age in years"}
-      
+
       result = TypeMapper.ash_type_to_nimble_options(Ash.Type.Integer, options)
       assert result[:type] == :integer
       assert result[:doc] == "User's age in years - Numeric value"
@@ -119,7 +121,7 @@ defmodule AshJido.TypeMapperTest do
 
     test "includes default when provided" do
       options = %{default: 18}
-      
+
       result = TypeMapper.ash_type_to_nimble_options(Ash.Type.Integer, options)
       assert result[:type] == :integer
       assert result[:default] == 18
@@ -131,9 +133,9 @@ defmodule AshJido.TypeMapperTest do
         description: "User's age in years",
         default: 18
       }
-      
+
       result = TypeMapper.ash_type_to_nimble_options(Ash.Type.Integer, options)
-      
+
       assert result[:type] == :integer
       assert result[:required] == true
       assert result[:doc] == "User's age in years - Numeric value - (required)"
@@ -147,7 +149,7 @@ defmodule AshJido.TypeMapperTest do
 
     test "nil allow_nil? is treated as allowing nil" do
       options = %{allow_nil?: nil}
-      
+
       assert TypeMapper.ash_type_to_nimble_options(Ash.Type.String, options) ==
                [type: :string]
     end
@@ -157,9 +159,9 @@ defmodule AshJido.TypeMapperTest do
     test "nested array types" do
       # This tests how we handle complex nested structures
       nested_array = {:array, {:array, Ash.Type.String}}
-      
+
       result = TypeMapper.ash_type_to_nimble_options(nested_array, %{})
-      
+
       # Should handle nested arrays gracefully
       assert result[:type] == {:list, {:list, :string}}
     end
@@ -170,9 +172,9 @@ defmodule AshJido.TypeMapperTest do
         description: "Complex field",
         default: "default_value"
       }
-      
+
       result = TypeMapper.ash_type_to_nimble_options(Ash.Type.String, options)
-      
+
       # Should include all provided options
       assert Keyword.get(result, :type) == :string
       assert Keyword.get(result, :required) == true

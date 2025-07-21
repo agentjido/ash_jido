@@ -51,7 +51,7 @@ defmodule AshJido.Resource.Transformers.GenerateJidoActions do
       case entity do
         %AshJido.Resource.AllActions{} = all_actions ->
           expand_all_actions(resource, all_actions, dsl_state)
-          
+
         %AshJido.Resource.JidoAction{} = jido_action ->
           [jido_action]
       end
@@ -61,18 +61,22 @@ defmodule AshJido.Resource.Transformers.GenerateJidoActions do
   defp expand_all_actions(_resource, all_actions, dsl_state) do
     # Get all actions from the resource
     all_ash_actions = get_all_ash_actions(dsl_state)
-    
+
     # Filter based on only/except options
     filtered_actions = filter_actions(all_ash_actions, all_actions)
-    
+
     # Convert to JidoAction structs with smart defaults
     Enum.map(filtered_actions, fn ash_action ->
       %AshJido.Resource.JidoAction{
         action: ash_action.name,
-        name: nil, # Will use smart defaults
-        module_name: nil, # Will use smart defaults
-        description: nil, # Will inherit from ash action
-        tags: all_actions.tags || [], # Additional tags from all_actions
+        # Will use smart defaults
+        name: nil,
+        # Will use smart defaults
+        module_name: nil,
+        # Will inherit from ash action
+        description: nil,
+        # Additional tags from all_actions
+        tags: all_actions.tags || [],
         output_map?: true,
         pagination?: true
       }

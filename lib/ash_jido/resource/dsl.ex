@@ -14,9 +14,9 @@ defmodule AshJido.Resource.Dsl do
           name: :action,
           describe: """
           Expose an Ash action as a Jido action.
-          
+
           ## Usage Examples
-          
+
           Simple syntax (uses all defaults):
           ```elixir
           jido do
@@ -25,21 +25,21 @@ defmodule AshJido.Resource.Dsl do
             action :update
           end
           ```
-          
+
           With custom name and description:
           ```elixir
           jido do
             action :create, name: "create_user", description: "Create a new user account"
           end
           ```
-          
+
           With tags for AI discovery:
           ```elixir
           jido do
             action :read, tags: ["search", "user-management", "public"]
           end
           ```
-          
+
           Expose all actions with defaults:
           ```elixir
           jido do
@@ -65,12 +65,14 @@ defmodule AshJido.Resource.Dsl do
             ],
             description: [
               type: :string,
-              doc: "Description for the Jido action. Inherits from Ash action description if available"
+              doc:
+                "Description for the Jido action. Inherits from Ash action description if available"
             ],
             tags: [
               type: {:list, :string},
               default: [],
-              doc: "Tags for better categorization and AI discovery. Auto-generates smart defaults"
+              doc:
+                "Tags for better categorization and AI discovery. Auto-generates smart defaults"
             ],
             output_map?: [
               type: :boolean,
@@ -88,12 +90,12 @@ defmodule AshJido.Resource.Dsl do
           name: :all_actions,
           describe: """
           Expose all Ash actions as Jido actions with smart defaults.
-          
+
           This creates Jido actions for all create, read, update, destroy, and custom actions
           defined on the resource, using intelligent naming and categorization.
-          
+
           ## Usage
-          
+
           ```elixir
           jido do
             all_actions

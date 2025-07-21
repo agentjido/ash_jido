@@ -8,7 +8,8 @@ defmodule AshJido.ResourceTest do
       # Check that the DSL section is available
       section = AshJido.Resource.Dsl.jido_section()
       assert section.name == :jido
-      assert length(section.entities) == 2  # action and all_actions
+      # action and all_actions
+      assert length(section.entities) == 2
     end
 
     test "DSL entities are properly configured" do

@@ -220,7 +220,9 @@ defmodule AshJido.Mapper do
       case error do
         %{__struct__: module} ->
           module_name = module |> Module.split() |> Enum.join(".")
-          String.contains?(module_name, "Changeset") or String.contains?(module_name, "Validation")
+
+          String.contains?(module_name, "Changeset") or
+            String.contains?(module_name, "Validation")
 
         _ ->
           false
