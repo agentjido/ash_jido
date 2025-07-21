@@ -1,10 +1,11 @@
 # AshJido
 
-An Ash Framework extension that bridges Ash resources with the Jido agent framework. AshJido automatically converts Ash actions into Jido tools, making every Ash action available in an agent's toolbox.
+> **⚠️ PREVIEW - NOT READY FOR PRODUCTION USE**  
+> This library is in active development and not yet stable. APIs may change without notice.
+
+Bridge Ash Framework resources with Jido agents. Automatically converts Ash actions into Jido tools, making every Ash action available in an agent's toolbox.
 
 ## Quick Start
-
-Add AshJido to your Ash resource:
 
 ```elixir
 defmodule MyApp.User do
@@ -12,28 +13,57 @@ defmodule MyApp.User do
     extensions: [AshJido]
 
   actions do
-    default_accept_all :create, :read, :update, :destroy
+    create :register
+    read :by_id
+    update :profile
   end
 
   jido do
-    # Simple usage - expose actions with defaults
-    action :create
-    action :read
-    
-    # Advanced usage - customize the action
-    action :update, 
-      name: "update_user",
-      description: "Update a user's information"
+    action :register, name: "create_user"
+    action :by_id, name: "get_user" 
+    action :profile, tags: ["user-management"]
   end
 end
 ```
 
-This creates Jido.Action modules that can be used by Jido agents to interact with your Ash resources.
+Generates Jido.Action modules that agents can use:
+
+```elixir
+# In your agent
+MyApp.User.Jido.Register.run(
+  %{name: "John", email: "john@example.com"}, 
+  %{domain: MyApp.Domain}
+)
+```
+
+## Key Features
+
+- **Automatic Tool Generation**: Every Ash action becomes a Jido tool
+- **Type Safety**: Ash types map to NimbleOptions schemas  
+- **Policy Integration**: Respects Ash authorization policies
+- **Smart Defaults**: Intelligent naming and categorization
+- **Bulk Exposure**: `all_actions` for rapid setup
+- **AI-Optimized**: Tags and descriptions for better agent discovery
+
+## DSL Options
+
+```elixir
+jido do
+  # Simple exposure
+  action :create
+  
+  # Custom configuration  
+  action :update, 
+    name: "modify_user",
+    description: "Update user information",
+    tags: ["user-management", "data-modification"]
+    
+  # Bulk exposure
+  all_actions except: [:internal_action]
+end
+```
 
 ## Installation
-
-If [available in Hex](https://hex.pm/docs/publish), the package can be installed
-by adding `ash_jido` to your list of dependencies in `mix.exs`:
 
 ```elixir
 def deps do
@@ -43,7 +73,33 @@ def deps do
 end
 ```
 
-Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
-and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
-be found at <https://hexdocs.pm/ash_jido>.
+## Context Requirements
 
+Actions require a context with at minimum a domain:
+
+```elixir
+context = %{
+  domain: MyApp.Domain,
+  actor: current_user,     # optional: for authorization
+  tenant: "org_123"        # optional: for multi-tenancy
+}
+
+MyApp.User.Jido.Create.run(params, context)
+```
+
+## Documentation
+
+- [Usage Rules](usage-rules.md) - Comprehensive patterns and best practices
+- [API Documentation](https://hexdocs.pm/ash_jido) - Auto-generated docs
+
+## Development
+
+```bash
+mix deps.get
+mix test
+mix format
+```
+
+## License
+
+MIT
