@@ -1,7 +1,11 @@
 # AshJido
 
-> **⚠️ PREVIEW - NOT READY FOR PRODUCTION USE**  
-> This library is in active development and not yet stable. APIs may change without notice.
+> **🧪 EXPERIMENTAL**
+>
+> This library is experimental and under active development.
+> - Public APIs may change without notice, including breaking changes
+> - Documentation and features are still evolving
+> - Not recommended for critical production systems yet
 
 Bridge Ash Framework resources with Jido agents. Automatically converts Ash actions into Jido tools, making every Ash action available in an agent's toolbox.
 
