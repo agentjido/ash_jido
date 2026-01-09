@@ -76,10 +76,10 @@ end
 - Include validation through NimbleOptions schemas
 
 ### Output Formatting
-- Default: `output_map?: true` converts structs to maps
+- Default: `output_map?: true` converts Ash structs to plain maps
 - Set `output_map?: false` to preserve Ash structs
-- Read actions return `%{results: [...], count: N}` format
-- Single operations return `%{result: data}` format
+- Read actions return a list of records
+- Create/Update actions return the record
 
 ## Error Handling
 

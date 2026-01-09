@@ -2,8 +2,6 @@
 
 AshJido bridges Ash Framework resources with Jido agents by automatically generating `Jido.Action` modules from your Ash actions. Every Ash action becomes a tool in an agent's toolbox while maintaining type safety and respecting Ash authorization policies.
 
-> **🧪 Experimental**: This library is under active development. APIs may change without notice.
-
 ## Installation
 
 Add `ash_jido` to your dependencies in `mix.exs`:
@@ -117,21 +115,21 @@ Call the generated modules using `run/2` with params and a context map. The cont
   %{domain: MyApp.Accounts}
 )
 
-# List users
-{:ok, %{results: users, count: count}} = MyApp.Accounts.User.Jido.Read.run(
+# List users (returns list of maps when output_map?: true)
+{:ok, users} = MyApp.Accounts.User.Jido.Read.run(
   %{},
   %{domain: MyApp.Accounts}
 )
 
-# Update a user
+# Update a user (requires id)
 {:ok, updated_user} = MyApp.Accounts.User.Jido.UpdateProfile.run(
-  %{id: user.id, name: "Jane Doe"},
+  %{id: user[:id], name: "Jane Doe"},
   %{domain: MyApp.Accounts}
 )
 
-# Delete a user
+# Delete a user (requires id)
 {:ok, _} = MyApp.Accounts.User.Jido.Destroy.run(
-  %{id: user.id},
+  %{id: user[:id]},
   %{domain: MyApp.Accounts}
 )
 ```
@@ -185,13 +183,9 @@ end
 
 ## Output Formats
 
-By default (`output_map?: true`), outputs are converted to maps for easier consumption:
+By default (`output_map?: true`), Ash structs are converted to plain maps for easier consumption by agents and JSON serialization.
 
-- **Read actions** return: `%{results: [...], count: N}`
-- **Create/Update actions** return: `%{result: data}`
-- **Destroy actions** return: `%{result: :ok}` or the destroyed record
-
-Set `output_map?: false` to preserve Ash structs in the output.
+Set `output_map?: false` to preserve the original Ash resource structs in the output.
 
 ## Error Handling
 
@@ -227,10 +221,14 @@ end
 
 ### Default Action Names
 
-Auto-generated names follow the pattern `resource_action`:
+Auto-generated names follow verb-first patterns:
 
-- `User` resource with `:create` action → `"user_create"`
-- `BlogPost` resource with `:publish` action → `"blog_post_publish"`
+- `:create` → `"create_<resource>"` (e.g. `"create_user"`)
+- `:read` with name `:read` → `"list_<resources>"` (e.g. `"list_users"`)
+- `:read` with name `:by_id` → `"get_<resource>_by_id"` (e.g. `"get_user_by_id"`)
+- `:update` → `"update_<resource>"` (e.g. `"update_user"`)
+- `:destroy` → `"delete_<resource>"` (e.g. `"delete_user"`)
+- custom `:action` → `"<resource>_<action_name>"` or `"<verb>_<resource>"` for common verbs
 
 ### Default Module Names
 
@@ -239,17 +237,17 @@ Modules are generated under the resource namespace:
 - `MyApp.Accounts.User` with `:register` action → `MyApp.Accounts.User.Jido.Register`
 - `MyApp.Blog.Post` with `:publish` action → `MyApp.Blog.Post.Jido.Publish`
 
-## Action Type Categories
+## Action Types
 
-Actions are automatically categorized based on type:
+Each Ash action type maps to corresponding behavior:
 
-| Ash Action Type | Category | Use Case |
-|-----------------|----------|----------|
-| `:create` | `data_creation` | Creating new records |
-| `:read` | `data_retrieval` | Querying and listing |
-| `:update` | `data_modification` | Modifying existing records |
-| `:destroy` | `data_deletion` | Removing records |
-| `:action` | `custom_operation` | Custom business logic |
+| Ash Action Type | Behavior |
+|-----------------|----------|
+| `:create` | Creates a new record via `Ash.create!` |
+| `:read` | Queries records via `Ash.read!` |
+| `:update` | Updates a record (requires `id` param) via `Ash.update!` |
+| `:destroy` | Deletes a record (requires `id` param) via `Ash.destroy!` |
+| `:action` | Runs custom logic via `Ash.run_action!` |
 
 ## Complete Example
 

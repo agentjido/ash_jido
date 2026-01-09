@@ -1,30 +1,58 @@
-# AGENT.md
+# AGENTS.md
 
 ## Commands
+
 - Build: `mix compile`
+- Quality: `mix quality` (format check, compile warnings, credo, dialyzer)
 - Test all: `mix test`
-- Test single file: `mix test test/path/to/test.exs`
-- Test single test: `mix test test/path/to/test.exs:line_number`
+- Test single: `mix test test/path/to/test.exs:line_number`
 - Format: `mix format`
 - Deps: `mix deps.get`
 - Shell: `iex -S mix`
 
 ## Architecture
-- Elixir project with Mix build tool
-- **Purpose**: Ash Framework extension to integrate with Jido agent framework
-- **Goal**: Bridge Ash resources with Jido actions - every Ash action becomes a tool in an agent's toolbox
-- Main module: `AshJido` in `lib/ash_jido.ex`
-- Core components: `AshJido.Resource` (Spark extension), `AshJido.Generator`, `AshJido.Mapper`
-- Tests in `test/` directory using ExUnit
-- Dependencies: `{:ash, "~> 3.5"}`, `{:jido, "~> 1.1"}`
-- Standard Elixir application structure
+
+AshJido is a thin bridge library (~400 LOC) that generates `Jido.Action` modules from Ash resources at compile time.
+
+### Core Modules
+
+| Module | Purpose |
+|--------|---------|
+| `AshJido` | Spark DSL extension entry point |
+| `AshJido.Resource.Dsl` | DSL section definition (`jido do ... end`) |
+| `AshJido.Resource.Transformers.GenerateJidoActions` | Compile-time transformer |
+| `AshJido.Generator` | Generates Jido.Action module AST (internal) |
+| `AshJido.Mapper` | Converts Ash structs to maps (internal) |
+| `AshJido.TypeMapper` | Maps Ash types to NimbleOptions (internal) |
+| `AshJido.Error` | Converts Ash errors to Jido errors (public) |
+
+### Key Behaviors
+
+- Domain is **required** in context - raises `ArgumentError` if missing
+- Update/destroy actions require `id` parameter
+- Default naming: `create_user`, `list_users`, `update_user`, `delete_user`
+- `output_map?: true` (default) converts Ash structs to plain maps
+
+### Dependencies
+
+- `{:ash, "~> 3.12"}` - Ash Framework
+- `{:jido, "~> 1.1"}` - Jido agent framework
+- `{:jido_action, "~> 1.3"}` - Jido action system
+- `{:splode, "~> 0.2"}` - Error handling
 
 ## Code Style
-- Use `mix format` for consistent formatting (configured in `.formatter.exs`)
-- Follow Elixir naming conventions: snake_case for variables/functions, PascalCase for modules
-- Use `@doc` and `@moduledoc` for documentation
-- Tests use ExUnit with `use ExUnit.Case` and `doctest` for inline examples
-- Module names follow project namespace: `AshJido.*`
+
+- Use `mix format` for formatting
+- Internal modules use `@moduledoc false`
+- Public API: `AshJido` extension + `AshJido.Error`
+- Tests in `test/` using ExUnit
+
+## Documentation
+
+- `README.md` - Quick start
+- `guides/getting-started.md` - Comprehensive usage
+- `guides/ash-jido-demo.livemd` - Interactive demo
+- `usage-rules.md` - AI/LLM patterns
 
 
 

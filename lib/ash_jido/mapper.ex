@@ -1,10 +1,5 @@
 defmodule AshJido.Mapper do
-  @moduledoc """
-  Handles conversion of Ash results to Jido-compatible formats.
-
-  Converts Ash structs to maps (when configured) and wraps errors
-  in Jido.Action.Error format via `AshJido.Error`.
-  """
+  @moduledoc false
 
   @ash_meta_keys [
     :__meta__,

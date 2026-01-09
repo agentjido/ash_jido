@@ -1,7 +1,5 @@
 defmodule AshJido.TypeMapper do
-  @moduledoc """
-  Maps Ash types to NimbleOptions schema specifications.
-  """
+  @moduledoc false
 
   @doc """
   Converts an Ash type to a NimbleOptions schema entry.

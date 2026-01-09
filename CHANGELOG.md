@@ -9,8 +9,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.0] - 2026-01-09
 
-> ⚠️ **Experimental/Pre-release**: This package is in early development. APIs may change.
-
 ### Added
 
 - Ash DSL extension (`AshJido`) for defining Jido actions within Ash resources

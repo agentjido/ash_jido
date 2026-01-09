@@ -1,54 +1,86 @@
 defmodule AshJido do
   @moduledoc """
-  AshJido bridges Ash Framework resources with Jido actions.
+  Bridge Ash Framework resources with Jido agents.
 
-  This library provides an Ash Framework extension that automatically generates Jido.Action
-  modules from Ash Resources, enabling every Ash action to become a tool
-  in an agent's toolbox while maintaining type safety and Ash policies.
+  Generates `Jido.Action` modules from Ash actions at compile time, enabling
+  Ash actions to be called as AI tools while maintaining type safety and Ash policies.
 
   ## Usage
 
-  Add the extension to your Ash resource:
-
       defmodule MyApp.Accounts.User do
         use Ash.Resource,
+          domain: MyApp.Accounts,
           extensions: [AshJido]
 
         actions do
           create :register
-          read :by_id, primary?: true
+          read :by_id
         end
 
         jido do
           action :register
-          action :by_id, name: "get_user", module_name: MyApp.UserFinder
+          action :by_id, name: "get_user"
         end
       end
 
-  This will generate corresponding Jido.Action modules that can be used
-  in agents and workflows.
+  Generated modules can be called with `run/2`:
 
-  ## DSL
+      {:ok, user} = MyApp.Accounts.User.Jido.Register.run(
+        %{name: "John"},
+        %{domain: MyApp.Accounts, actor: current_user}
+      )
+
+  ## Context
+
+  The context map **requires** a `:domain` key. An `ArgumentError` is raised if missing.
+
+      context = %{
+        domain: MyApp.Accounts,  # REQUIRED
+        actor: current_user,     # optional: for authorization
+        tenant: "org_123"        # optional: for multi-tenancy
+      }
+
+  ## DSL: Individual Actions
 
       jido do
-        action :create_action              # Auto-generate with defaults
-        action :read_action, name: "custom_name"  # Custom action name
-        action :special_action, module_name: MyApp.SpecialModule  # Custom module name
+        action :create
+        action :read, name: "list_users", description: "List all users"
+        action :update, tags: ["user-management"]
+        action :special, output_map?: false
       end
 
-  ## DSL Options
+  ## DSL: Bulk Exposure
 
-  The `action` keyword supports both simple and advanced usage:
+      jido do
+        all_actions
+        all_actions except: [:destroy]
+        all_actions only: [:create, :read]
+        all_actions tags: ["public-api"]
+      end
 
-  - Simple: `action :create` - Exposes the action with default settings
-  - Advanced: `action :create, options` - Exposes the action with custom configuration
+  ## Action Options
 
-  ### Action Options
+  - `name` - Custom Jido action name (default: auto-generated, e.g. `"create_user"`)
+  - `module_name` - Custom module name (default: `Resource.Jido.ActionName`)
+  - `description` - Action description (default: from Ash action)
+  - `tags` - List of tags for categorization (default: `[]`)
+  - `output_map?` - Convert output structs to maps (default: `true`)
 
-  - `name` - Custom name for the Jido action (defaults to "resource_action")
-  - `module_name` - Custom module name for the generated Jido.Action (defaults to "Resource.Jido.ActionName")
-  - `description` - Description for the action (defaults to Ash action description)
-  - `output_map?` - Convert output structs to maps (default: true)
+  ## Default Naming
+
+  When `name` is not provided:
+
+  - `:create` → `"create_<resource>"` (e.g. `"create_user"`)
+  - `:read` with name `:read` → `"list_<resources>"` (e.g. `"list_users"`)
+  - `:read` with name `:by_id` → `"get_<resource>_by_id"`
+  - `:update` → `"update_<resource>"`
+  - `:destroy` → `"delete_<resource>"`
+  - custom `:action` → `"<resource>_<action_name>"`
+
+  ## See Also
+
+  - [Getting Started Guide](guides/getting-started.md)
+  - [Usage Rules](usage-rules.md)
   """
 
   @sections [AshJido.Resource.Dsl.jido_section()]

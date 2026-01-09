@@ -3,7 +3,7 @@ defmodule AshJido.MixProject do
 
   @version "0.1.0"
   @source_url "https://github.com/agentjido/ash_jido"
-  @description "[EXPERIMENTAL] Integration between the Ash framework and the Jido agent ecosystem. APIs may change without notice."
+  @description "Integration between the Ash Framework and the Jido Agent ecosystem."
 
   def project do
     [
@@ -28,13 +28,6 @@ defmodule AshJido.MixProject do
       test_coverage: [
         tool: ExCoveralls,
         summary: [threshold: 90]
-      ],
-
-      # Dialyzer
-      dialyzer: [
-        plt_local_path: "priv/plts/project.plt",
-        plt_core_path: "priv/plts/core.plt",
-        flags: [:error_handling, :unknown]
       ]
     ]
   end

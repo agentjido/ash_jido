@@ -1,13 +1,5 @@
 defmodule AshJido.Generator do
-  @moduledoc """
-  Generates Jido.Action modules from Ash actions at compile time.
-
-  This module is responsible for:
-  - Analyzing Ash action definitions
-  - Converting Ash types to NimbleOptions schemas
-  - Generating the complete Jido.Action module AST
-  - Ensuring proper parameter and context handling
-  """
+  @moduledoc false
 
   alias AshJido.TypeMapper
   alias Spark.Dsl.Transformer
