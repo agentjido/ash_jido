@@ -10,6 +10,7 @@ defmodule AshJido.Test.Domain do
     resource(AshJido.Test.User)
     resource(AshJido.Test.Post)
     resource(AshJido.Test.CustomModules)
+    resource(AshJido.Test.ProtectedResource)
   end
 
   # Make this domain accessible for testing

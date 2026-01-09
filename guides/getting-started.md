@@ -187,6 +187,51 @@ By default (`output_map?: true`), Ash structs are converted to plain maps for ea
 
 Set `output_map?: false` to preserve the original Ash resource structs in the output.
 
+## Policy Enforcement
+
+AshJido respects Ash authorization policies. When you define policies on your resources, they are automatically enforced when actions are executed through the generated Jido modules.
+
+```elixir
+defmodule MyApp.Accounts.SecureDocument do
+  use Ash.Resource,
+    domain: MyApp.Accounts,
+    extensions: [AshJido],
+    authorizers: [Ash.Policy.Authorizer]
+
+  policies do
+    policy action_type(:create) do
+      authorize_if actor_present()
+    end
+
+    policy action_type(:read) do
+      authorize_if always()
+    end
+  end
+
+  jido do
+    action :create
+    action :read
+  end
+end
+```
+
+When calling actions, pass the `actor` in the context:
+
+```elixir
+# This will fail with :forbidden - no actor provided
+{:error, error} = SecureDocument.Jido.Create.run(
+  %{title: "Secret"},
+  %{domain: MyApp.Accounts, actor: nil}
+)
+error.details.reason  # => :forbidden
+
+# This succeeds - actor is present
+{:ok, doc} = SecureDocument.Jido.Create.run(
+  %{title: "Secret"},
+  %{domain: MyApp.Accounts, actor: current_user}
+)
+```
+
 ## Error Handling
 
 Ash errors are automatically converted to Jido's Splode-based error system:
