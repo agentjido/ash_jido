@@ -6,7 +6,8 @@ defmodule AshJido.Resource.AllActions do
   defstruct [
     :except,
     :only,
-    :tags
+    :tags,
+    :__spark_metadata__
   ]
 
   @type t :: %__MODULE__{

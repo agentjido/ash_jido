@@ -168,17 +168,15 @@ defmodule AshJido.EnhancedGeneratorTest do
       # Check the generated module exists
       assert Code.ensure_loaded?(module_name)
 
-      # Check it has the correct schema (action arguments + read params)
+      # Check it has the correct schema (only action arguments, no hardcoded params)
       schema = module_name.schema()
       schema_keys = Keyword.keys(schema)
 
       # Should have action-specific argument
       assert :email in schema_keys
 
-      # Should also have common read parameters
-      assert :id in schema_keys
-      assert :limit in schema_keys
-      assert :offset in schema_keys
+      # Should NOT have hardcoded parameters - only action arguments
+      assert length(schema_keys) == 1
     end
   end
 end

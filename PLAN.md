@@ -58,7 +58,6 @@ Options inside `action/…`:
 | `name`        | auto‑derived           | Jido tool name                             |
 | `description` | Ash action description | Sent to LLMs                               |
 | `output_map?` | `true`                 | convert structs → maps                     |
-| `pagination?` | `true`                 | include `page`/`per_page` params for reads |
 
 ---
 

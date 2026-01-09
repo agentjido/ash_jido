@@ -9,8 +9,8 @@ defmodule AshJido.Resource.JidoAction do
     :module_name,
     :description,
     :tags,
-    output_map?: true,
-    pagination?: true
+    :__spark_metadata__,
+    output_map?: true
   ]
 
   @type t :: %__MODULE__{
@@ -19,7 +19,6 @@ defmodule AshJido.Resource.JidoAction do
           module_name: atom() | nil,
           description: String.t() | nil,
           tags: [String.t()] | nil,
-          output_map?: boolean(),
-          pagination?: boolean()
+          output_map?: boolean()
         }
 end

@@ -78,11 +78,6 @@ defmodule AshJido.Resource.Dsl do
               type: :boolean,
               default: true,
               doc: "Convert output structs to maps (recommended for AI tools)"
-            ],
-            pagination?: [
-              type: :boolean,
-              default: true,
-              doc: "Include pagination parameters for read actions"
             ]
           ]
         },

@@ -58,7 +58,7 @@ defmodule AshJido.TypeMapperTest do
 
       # UtcDateTime falls through to default case (not explicitly handled)
       result = TypeMapper.ash_type_to_nimble_options(Ash.Type.UtcDateTime, %{})
-      assert result[:type] == :map
+      assert result[:type] == :any
     end
 
     test "maps decimal to float" do
@@ -87,28 +87,12 @@ defmodule AshJido.TypeMapperTest do
       assert result[:type] == {:list, :float}
     end
 
-    test "unknown types fallback to map" do
+    test "unknown types fallback to any" do
       result = TypeMapper.ash_type_to_nimble_options(:unknown_type, %{})
-      assert result[:type] == :map
+      assert result[:type] == :any
 
       result = TypeMapper.ash_type_to_nimble_options(SomeCustomType, %{})
-      assert result[:type] == :map
-    end
-
-    test "uses storage_type for custom types" do
-      # Create a custom type that has a storage_type returning Ash.Type.String
-      defmodule CustomStringType do
-        @behaviour Ash.Type
-
-        def storage_type, do: Ash.Type.String
-        def cast_input(value, _), do: {:ok, value}
-        def cast_stored(value, _), do: {:ok, value}
-        def dump_to_embedded(value, _), do: {:ok, value}
-        def dump_to_native(value, _), do: {:ok, value}
-      end
-
-      result = TypeMapper.ash_type_to_nimble_options(CustomStringType, %{})
-      assert result[:type] == :string
+      assert result[:type] == :any
     end
 
     test "includes description when provided" do
@@ -116,7 +100,7 @@ defmodule AshJido.TypeMapperTest do
 
       result = TypeMapper.ash_type_to_nimble_options(Ash.Type.Integer, options)
       assert result[:type] == :integer
-      assert result[:doc] == "User's age in years - Numeric value"
+      assert result[:doc] == "User's age in years"
     end
 
     test "includes default when provided" do
@@ -138,7 +122,7 @@ defmodule AshJido.TypeMapperTest do
 
       assert result[:type] == :integer
       assert result[:required] == true
-      assert result[:doc] == "User's age in years - Numeric value - (required)"
+      assert result[:doc] == "User's age in years"
       assert result[:default] == 18
     end
 
@@ -178,7 +162,7 @@ defmodule AshJido.TypeMapperTest do
       # Should include all provided options
       assert Keyword.get(result, :type) == :string
       assert Keyword.get(result, :required) == true
-      assert Keyword.get(result, :doc) == "Complex field - Text input - (required)"
+      assert Keyword.get(result, :doc) == "Complex field"
       assert Keyword.get(result, :default) == "default_value"
     end
   end

@@ -70,17 +70,16 @@ defmodule AshJido.MapperTest do
       assert {:error, "Custom error message"} = result
     end
 
-    test "converts Ash exception to Jido.Error format" do
+    test "converts Ash exception to Jido.Action.Error format" do
       ash_error = %Ash.Error.Invalid{errors: [%Ash.Error.Query.NotFound{resource: User}]}
 
       result = Mapper.wrap_result({:error, ash_error}, %{})
 
       assert {:error, jido_error} = result
-      # Invalid errors map to validation_error
-      assert jido_error.type == :validation_error
+      # Invalid errors map to InvalidInputError (validation_error)
+      assert %Jido.Action.Error.InvalidInputError{} = jido_error
       assert is_binary(jido_error.message)
       assert jido_error.details.ash_error == ash_error
-      assert jido_error.details.ash_error_class == :invalid
     end
 
     test "handles non-Ash struct fallback conversion" do

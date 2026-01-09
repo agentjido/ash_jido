@@ -49,7 +49,6 @@ defmodule AshJido do
   - `module_name` - Custom module name for the generated Jido.Action (defaults to "Resource.Jido.ActionName")
   - `description` - Description for the action (defaults to Ash action description)
   - `output_map?` - Convert output structs to maps (default: true)
-  - `pagination?` - Include pagination params for read actions (default: true)
   """
 
   @sections [AshJido.Resource.Dsl.jido_section()]
@@ -58,10 +57,12 @@ defmodule AshJido do
     transformers: [AshJido.Resource.Transformers.GenerateJidoActions],
     sections: @sections
 
+  @version Mix.Project.config()[:version]
+
   @doc """
   Returns the version of AshJido.
   """
-  def version, do: Mix.Project.config()[:version]
+  def version, do: @version
 
   @doc false
   def explain(dsl_state, opts) do

@@ -66,15 +66,15 @@ defmodule AshJido.GeneratorTest do
       jido_action = %AshJido.Resource.JidoAction{
         action: :register,
         name: "test_register",
-        module_name: nil,
+        module_name: TestGeneratedRegisterAction,
         description: "Test register action",
-        output_map?: true,
-        pagination?: false
+        output_map?: true
       }
 
       module_name = Generator.generate_jido_action_module(TestResource, jido_action, dsl_state)
 
       # Module should be generated and loadable
+      assert module_name == TestGeneratedRegisterAction
       assert Code.ensure_loaded?(module_name)
 
       # Should implement Jido.Action behaviour
@@ -101,8 +101,7 @@ defmodule AshJido.GeneratorTest do
         name: nil,
         module_name: TestCustomModule,
         description: nil,
-        output_map?: true,
-        pagination?: false
+        output_map?: true
       }
 
       module_name = Generator.generate_jido_action_module(TestResource, jido_action, dsl_state)
@@ -118,22 +117,20 @@ defmodule AshJido.GeneratorTest do
       jido_action = %AshJido.Resource.JidoAction{
         action: :read,
         name: "list_all",
-        module_name: nil,
+        module_name: TestGeneratedReadAction,
         description: "List all records",
-        output_map?: true,
-        pagination?: true
+        output_map?: true
       }
 
       module_name = Generator.generate_jido_action_module(TestResource, jido_action, dsl_state)
 
+      assert module_name == TestGeneratedReadAction
       assert Code.ensure_loaded?(module_name)
       assert module_name.name() == "list_all"
 
-      # Check read-specific schema
+      # Read actions only use action arguments (no hardcoded params)
       schema = module_name.schema()
-      assert Keyword.has_key?(schema, :id)
-      assert Keyword.has_key?(schema, :limit)
-      assert Keyword.has_key?(schema, :offset)
+      assert schema == []
     end
 
     test "raises error for non-existent action" do
@@ -144,8 +141,7 @@ defmodule AshJido.GeneratorTest do
         name: nil,
         module_name: nil,
         description: nil,
-        output_map?: true,
-        pagination?: false
+        output_map?: true
       }
 
       assert_raise RuntimeError, ~r/Action non_existent not found/, fn ->
@@ -172,8 +168,7 @@ defmodule AshJido.GeneratorTest do
         name: "register_user",
         module_name: nil,
         description: "Register a new user",
-        output_map?: true,
-        pagination?: false
+        output_map?: true
       }
 
       module_name = Generator.generate_jido_action_module(TestResource, jido_action, dsl_state)
@@ -280,7 +275,7 @@ defmodule AshJido.GeneratorTest do
         action: :register,
         # This will trigger default naming
         name: nil,
-        module_name: nil,
+        module_name: TestDefaultNamingAction,
         description: "Register user",
         output_map?: true
       }
@@ -288,13 +283,14 @@ defmodule AshJido.GeneratorTest do
       module_name =
         AshJido.Generator.generate_jido_action_module(TestResource, jido_action, dsl_state)
 
+      assert module_name == TestDefaultNamingAction
       # Should use new smart naming for create actions
       assert module_name.name() == "create_test_resource"
     end
   end
 
   describe "error handling" do
-    test "determine_domain raises helpful error when no domain in context" do
+    test "raises helpful error when no domain in context" do
       dsl_state = TestResource.spark_dsl_config()
 
       jido_action = %AshJido.Resource.JidoAction{
@@ -309,7 +305,7 @@ defmodule AshJido.GeneratorTest do
         AshJido.Generator.generate_jido_action_module(TestResource, jido_action, dsl_state)
 
       # Should raise when no domain is provided
-      assert_raise ArgumentError, ~r/No domain found for resource/, fn ->
+      assert_raise ArgumentError, ~r/AshJido: :domain must be provided in context/, fn ->
         # context without :domain
         module_name.run(%{}, %{})
       end

@@ -231,8 +231,7 @@ defmodule AshJido.ModuleNameOverrideTest do
         name: "test_action",
         module_name: MyApp.TestModule,
         description: "Test description",
-        output_map?: true,
-        pagination?: false
+        output_map?: true
       }
 
       assert jido_action.action == :test
@@ -240,7 +239,6 @@ defmodule AshJido.ModuleNameOverrideTest do
       assert jido_action.module_name == MyApp.TestModule
       assert jido_action.description == "Test description"
       assert jido_action.output_map? == true
-      assert jido_action.pagination? == false
     end
   end
 end

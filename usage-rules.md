@@ -45,10 +45,10 @@ end
 
 ## Context Requirements
 
-### Domain Configuration
-- Always provide `domain:` in action context
+### Domain Configuration (REQUIRED)
+- **Domain is REQUIRED** - always provide `domain:` in action context
 - Use `%{domain: MyApp.Domain}` pattern
-- Auto-discovery available but explicit is preferred
+- Actions will raise `ArgumentError` if domain is not provided
 
 ### Actor and Tenant
 - Include `actor:` for authorization
@@ -102,9 +102,7 @@ end
 - Use `except:` to exclude admin or internal actions
 
 ### Performance
-- Use pagination parameters for read actions
 - Consider `limit:` and `offset:` for large datasets
-- Enable pagination with `pagination?: true` (default)
 
 ### AI Integration
 - Add descriptive tags for better AI discovery
@@ -147,10 +145,9 @@ end
 
 ## Troubleshooting
 
-### Domain Not Found Error
-- Ensure resource is registered in a domain
-- Provide explicit domain in context
-- Check domain module includes the resource
+### Domain Not Provided Error
+- Domain is **required** in context - provide `%{domain: MyApp.Domain}`
+- Ensure the resource is registered in the domain you're providing
 
 ### Action Not Found Error
 - Verify action exists in resource definition

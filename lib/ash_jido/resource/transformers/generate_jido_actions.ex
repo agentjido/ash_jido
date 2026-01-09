@@ -77,8 +77,7 @@ defmodule AshJido.Resource.Transformers.GenerateJidoActions do
         description: nil,
         # Additional tags from all_actions
         tags: all_actions.tags || [],
-        output_map?: true,
-        pagination?: true
+        output_map?: true
       }
     end)
   end

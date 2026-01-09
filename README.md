@@ -79,17 +79,19 @@ end
 
 ## Context Requirements
 
-Actions require a context with at minimum a domain:
+Actions **require** a context with a domain (mandatory):
 
 ```elixir
 context = %{
-  domain: MyApp.Domain,
+  domain: MyApp.Domain,    # REQUIRED
   actor: current_user,     # optional: for authorization
   tenant: "org_123"        # optional: for multi-tenancy
 }
 
 MyApp.User.Jido.Create.run(params, context)
 ```
+
+> **Note:** If domain is not provided, an `ArgumentError` will be raised.
 
 ## Documentation
 

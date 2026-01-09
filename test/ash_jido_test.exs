@@ -13,7 +13,7 @@ defmodule AshJidoTest do
 
     test "version is not nil or empty" do
       version = AshJido.version()
-      assert version != nil
+      assert is_binary(version)
       assert String.length(version) > 0
     end
   end
