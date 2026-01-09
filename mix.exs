@@ -55,8 +55,8 @@ defmodule AshJido.MixProject do
     [
       # Runtime dependencies
       {:ash, "~> 3.12"},
-      jido_dep(:jido, "../jido", "~> 1.1"),
-      jido_dep(:jido_action, "../jido_action", "~> 1.3.0"),
+      {:jido, "~> 1.2"},
+      {:jido_action, "~> 1.0.0"},
       {:splode, "~> 0.2"},
       {:zoi, "~> 0.14"},
 
@@ -70,20 +70,6 @@ defmodule AshJido.MixProject do
       {:igniter, "~> 0.7", only: [:dev, :test]},
       {:usage_rules, "~> 0.1", only: [:dev]}
     ]
-  end
-
-  defp jido_dep(app, rel_path, hex_req, extra_opts \\ []) do
-    path = Path.expand(rel_path, __DIR__)
-
-    if File.dir?(path) and File.exists?(Path.join(path, "mix.exs")) do
-      {app, Keyword.merge([path: rel_path, override: true], extra_opts)}
-    else
-      {app, hex_req, extra_opts}
-    end
-    |> case do
-      {app, opts} when is_list(opts) -> {app, opts}
-      {app, req, opts} -> {app, req, opts}
-    end
   end
 
   defp aliases do
