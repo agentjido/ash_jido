@@ -13,7 +13,7 @@ defmodule AshJido.TypeMapper do
       [type: :integer]
   """
   def ash_type_to_nimble_options(ash_type, field_config \\ %{}) do
-    base_type = map_ash_type_to_nimble_type(ash_type)
+    base_type = map_ash_type(ash_type)
 
     [type: base_type]
     |> maybe_add_required(field_config)
@@ -21,7 +21,10 @@ defmodule AshJido.TypeMapper do
     |> maybe_add_default(field_config)
   end
 
-  defp map_ash_type_to_nimble_type(ash_type) do
+  @doc """
+  Maps an Ash type to its corresponding NimbleOptions type.
+  """
+  def map_ash_type(ash_type) do
     case ash_type do
       Ash.Type.String -> :string
       Ash.Type.Integer -> :integer
@@ -36,7 +39,7 @@ defmodule AshJido.TypeMapper do
       Ash.Type.Atom -> :atom
       Ash.Type.Map -> :map
       Ash.Type.Term -> :any
-      {:array, inner_type} -> {:list, map_ash_type_to_nimble_type(inner_type)}
+      {:array, inner_type} -> {:list, map_ash_type(inner_type)}
       _ -> :any
     end
   end

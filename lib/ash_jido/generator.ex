@@ -12,7 +12,7 @@ defmodule AshJido.Generator do
   def generate_jido_action_module(resource, jido_action, dsl_state) do
     ash_action = get_ash_action(resource, jido_action.action, dsl_state)
     module_name = build_module_name(resource, jido_action, ash_action)
-    module_ast = build_module_ast(resource, ash_action, jido_action, module_name)
+    module_ast = build_module_ast(resource, ash_action, jido_action, module_name, dsl_state)
 
     case Code.ensure_loaded(module_name) do
       {:module, _} ->
@@ -51,14 +51,14 @@ defmodule AshJido.Generator do
     end
   end
 
-  defp build_module_ast(resource, ash_action, jido_action, module_name) do
+  defp build_module_ast(resource, ash_action, jido_action, module_name, dsl_state) do
     action_name = jido_action.name || build_default_action_name(resource, ash_action)
 
     description =
       jido_action.description || ash_action.description || "Ash action: #{ash_action.name}"
 
-    # Build input schema
-    schema = build_parameter_schema(ash_action)
+    # Build input schema including accepted attributes
+    schema = build_parameter_schema(resource, ash_action, dsl_state)
 
     quote do
       defmodule unquote(module_name) do
@@ -100,7 +100,7 @@ defmodule AshJido.Generator do
                     tenant: tenant,
                     domain: domain
                   )
-                  |> Ash.create!(domain: domain)
+                  |> Ash.create!(actor: actor, tenant: tenant, domain: domain)
 
                 {:ok, result} |> AshJido.Mapper.wrap_result(@jido_config)
 
@@ -112,9 +112,11 @@ defmodule AshJido.Generator do
                     tenant: tenant,
                     domain: domain
                   )
-                  |> Ash.read!(domain: domain)
+                  |> Ash.read!(actor: actor, tenant: tenant, domain: domain)
 
-                {:ok, result} |> AshJido.Mapper.wrap_result(@jido_config)
+                # Ash.read! returns a raw list, not {:ok, result}
+                # Pass it directly to Mapper.wrap_result which will wrap it
+                AshJido.Mapper.wrap_result(result, @jido_config)
 
               :update ->
                 # Load the record to update using its primary key
@@ -140,7 +142,7 @@ defmodule AshJido.Generator do
                     tenant: tenant,
                     domain: domain
                   )
-                  |> Ash.update!(domain: domain)
+                  |> Ash.update!(actor: actor, tenant: tenant, domain: domain)
 
                 {:ok, result} |> AshJido.Mapper.wrap_result(@jido_config)
 
@@ -158,16 +160,18 @@ defmodule AshJido.Generator do
                   |> Ash.get!(record_id, domain: domain, actor: actor, tenant: tenant)
 
                 # Destroy the record
-                result =
+                # Ash.destroy! returns :ok atom, pass it directly to Mapper
+                :ok =
                   record
                   |> Ash.Changeset.for_destroy(@ash_action, %{},
                     actor: actor,
                     tenant: tenant,
                     domain: domain
                   )
-                  |> Ash.destroy!(domain: domain)
+                  |> Ash.destroy!(actor: actor, tenant: tenant, domain: domain)
 
-                {:ok, result} |> AshJido.Mapper.wrap_result(@jido_config)
+                # Pass :ok directly to Mapper which will convert to {:ok, nil}
+                AshJido.Mapper.wrap_result(:ok, @jido_config)
 
               :action ->
                 result =
@@ -230,21 +234,74 @@ defmodule AshJido.Generator do
     end
   end
 
-  defp build_parameter_schema(ash_action) do
+  defp build_parameter_schema(resource, ash_action, dsl_state) do
     case ash_action.type do
+      :create ->
+        # Create actions use accepted attributes plus action arguments
+        accepted_attrs = accepted_attributes_to_schema(resource, ash_action, dsl_state)
+        action_args = action_args_to_schema(ash_action.arguments || [])
+        accepted_attrs ++ action_args
+
       :update ->
-        # Update actions need an id field plus action arguments
+        # Update actions need an id field plus accepted attributes plus action arguments
         base = [id: [type: :string, required: true, doc: "ID of record to update"]]
-        base ++ action_args_to_schema(ash_action.arguments || [])
+        accepted_attrs = accepted_attributes_to_schema(resource, ash_action, dsl_state)
+        action_args = action_args_to_schema(ash_action.arguments || [])
+        base ++ accepted_attrs ++ action_args
 
       :destroy ->
         # Destroy actions just need an id
         [id: [type: :string, required: true, doc: "ID of record to destroy"]]
 
       _ ->
-        # Create, read, and custom actions use their declared arguments
+        # Read and custom actions use their declared arguments
         action_args_to_schema(ash_action.arguments || [])
     end
+  end
+
+  defp accepted_attributes_to_schema(_resource, ash_action, dsl_state) do
+    # Get the list of accepted attribute names from the action
+    accepted_names = ash_action.accept || []
+
+    # Get all attributes from the resource
+    all_attributes = Transformer.get_entities(dsl_state, [:attributes])
+
+    # Filter to only accepted attributes and convert to schema entries
+    accepted_names
+    |> Enum.map(fn attr_name ->
+      attr = Enum.find(all_attributes, &(&1.name == attr_name))
+
+      if attr do
+        {attr_name, attribute_to_nimble_options(attr)}
+      else
+        nil
+      end
+    end)
+    |> Enum.reject(&is_nil/1)
+  end
+
+  defp attribute_to_nimble_options(attr) do
+    base_type = TypeMapper.map_ash_type(attr.type)
+
+    opts = [type: base_type]
+
+    # For create actions, attributes without allow_nil? false are required
+    # unless they have a default value
+    opts =
+      if attr.allow_nil? == false and is_nil(attr.default) do
+        Keyword.put(opts, :required, true)
+      else
+        opts
+      end
+
+    # Add description if available
+    opts =
+      case attr.description do
+        desc when is_binary(desc) -> Keyword.put(opts, :doc, desc)
+        _ -> opts
+      end
+
+    opts
   end
 
   defp action_args_to_schema(arguments) do

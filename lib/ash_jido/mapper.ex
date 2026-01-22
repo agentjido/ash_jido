@@ -13,20 +13,38 @@ defmodule AshJido.Mapper do
   @doc """
   Wraps an Ash result according to the Jido action configuration.
 
+  Handles both wrapped results ({:ok, data}, {:error, error}) and raw data
+  returned directly from Ash operations (lists, structs, atoms).
+
+  ## Ash Operation Return Values
+
+  - Create: {:ok, result} - Already wrapped
+  - Update: {:ok, result} - Already wrapped
+  - Read: [record1, record2, ...] - Raw list, needs wrapping
+  - Destroy: :ok - Raw atom, needs wrapping
+
   ## Examples
 
       iex> AshJido.Mapper.wrap_result({:ok, %User{id: 1, name: "John"}}, %{output_map?: true})
       {:ok, %{id: 1, name: "John"}}
+
+      iex> AshJido.Mapper.wrap_result([%User{id: 1}, %User{id: 2}], %{output_map?: true})
+      {:ok, [%{id: 1}, %{id: 2}]}
+
+      iex> AshJido.Mapper.wrap_result(:ok, %{})
+      {:ok, %{deleted: true}}
 
       iex> AshJido.Mapper.wrap_result({:error, %Ash.Error.Invalid{}}, %{})
       {:error, %Jido.Action.Error.InvalidInputError{}}
   """
   def wrap_result(ash_result, jido_config \\ %{}) do
     case ash_result do
+      # Already wrapped success results
       {:ok, data} ->
         converted_data = maybe_convert_to_maps(data, jido_config)
         {:ok, converted_data}
 
+      # Already wrapped error results
       {:error, ash_error} when is_exception(ash_error) ->
         jido_error = AshJido.Error.from_ash(ash_error)
         {:error, jido_error}
@@ -34,7 +52,11 @@ defmodule AshJido.Mapper do
       {:error, error} ->
         {:error, error}
 
-      # Handle direct data (for some Ash operations)
+      # Raw :ok atom from Ash.destroy!
+      :ok ->
+        {:ok, %{deleted: true}}
+
+      # Handle direct data (for Ash.read! returning raw lists)
       data when not is_tuple(data) ->
         converted_data = maybe_convert_to_maps(data, jido_config)
         {:ok, converted_data}
