@@ -55,9 +55,9 @@ defmodule AshJido.MixProject do
     [
       # Runtime dependencies
       {:ash, "~> 3.12"},
-      {:jido, "~> 1.2"},
-      {:jido_action, "~> 1.0.0"},
-      {:splode, "~> 0.2"},
+      {:jido, "~> 2.0.0-rc"},
+      {:jido_action, "~> 2.0.0-rc"},
+      {:splode, "~> 0.3"},
       {:zoi, "~> 0.14"},
 
       # Dev/Test dependencies
