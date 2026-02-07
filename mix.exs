@@ -57,6 +57,7 @@ defmodule AshJido.MixProject do
       {:ash, "~> 3.12"},
       {:jido, "~> 2.0.0-rc"},
       {:jido_action, "~> 2.0.0-rc"},
+      {:jido_signal, "~> 2.0.0-rc"},
       {:splode, "~> 0.3"},
       {:zoi, "~> 0.14"},
 
@@ -113,7 +114,10 @@ defmodule AshJido.MixProject do
         "guides/ash-jido-demo.livemd"
       ],
       groups_for_extras: [
-        Guides: ~r/guides\/.*/
+        Guides: [
+          "guides/getting-started.md",
+          "guides/ash-jido-demo.livemd"
+        ]
       ]
     ]
   end

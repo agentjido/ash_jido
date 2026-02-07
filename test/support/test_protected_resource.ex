@@ -30,15 +30,15 @@ defmodule AshJido.Test.ProtectedResource do
 
   policies do
     policy action_type(:create) do
-      authorize_if actor_present()
+      authorize_if(actor_present())
     end
 
     policy action_type(:read) do
-      authorize_if always()
+      authorize_if(always())
     end
 
     policy action_type(:destroy) do
-      authorize_if actor_present()
+      authorize_if(actor_present())
     end
   end
 
