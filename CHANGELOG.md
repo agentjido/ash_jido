@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Reactive bridge for Ash notifications to `Jido.Signal` publications
+- `AshJido.Notifier` for publishing resource lifecycle events to `Jido.Signal.Bus`
+- `publish` and `publish_all` DSL entities in the `jido` section
+- `signal_bus` and `signal_prefix` DSL options for publication configuration
+- `AshJido.SignalFactory` for pure notification-to-signal transformation
+- `AshJido.Info` introspection helpers for signal bridge configuration
+
+### Changed
+
+- Added `AshJido.Resource.Transformers.CompilePublications` to compile and validate publication configs
+
 ## [0.1.0] - 2026-01-09
 
 ### Added

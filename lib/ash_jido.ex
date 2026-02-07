@@ -2,8 +2,10 @@ defmodule AshJido do
   @moduledoc """
   Bridge Ash Framework resources with Jido agents.
 
-  Generates `Jido.Action` modules from Ash actions at compile time, enabling
-  Ash actions to be called as AI tools while maintaining type safety and Ash policies.
+  Provides two capabilities:
+
+  1. Generates `Jido.Action` modules from Ash actions at compile time
+  2. Publishes `Jido.Signal` events from Ash notifier lifecycle events
 
   ## Usage
 
@@ -86,7 +88,10 @@ defmodule AshJido do
   @sections [AshJido.Resource.Dsl.jido_section()]
 
   use Spark.Dsl.Extension,
-    transformers: [AshJido.Resource.Transformers.GenerateJidoActions],
+    transformers: [
+      AshJido.Resource.Transformers.GenerateJidoActions,
+      AshJido.Resource.Transformers.CompilePublications
+    ],
     sections: @sections
 
   @version Mix.Project.config()[:version]

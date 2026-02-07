@@ -8,8 +8,8 @@ defmodule AshJido.ResourceTest do
       # Check that the DSL section is available
       section = AshJido.Resource.Dsl.jido_section()
       assert section.name == :jido
-      # action and all_actions
-      assert length(section.entities) == 2
+      # action, all_actions, publish, publish_all
+      assert length(section.entities) == 4
     end
 
     test "DSL entities are properly configured" do
@@ -18,6 +18,10 @@ defmodule AshJido.ResourceTest do
       action_entity = Enum.find(section.entities, &(&1.name == :action))
       assert action_entity != nil
       assert action_entity.target == AshJido.Resource.JidoAction
+
+      publish_entity = Enum.find(section.entities, &(&1.name == :publish))
+      assert publish_entity != nil
+      assert publish_entity.target == AshJido.Publication
     end
 
     test "JidoAction struct has required fields" do
