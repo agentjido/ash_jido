@@ -69,9 +69,14 @@ The `domain` is **required** in context. An `ArgumentError` is raised if missing
 
 ```elixir
 context = %{
-  domain: MyApp.Accounts,  # REQUIRED
-  actor: current_user,     # optional: for authorization
-  tenant: "org_123"        # optional: for multi-tenancy
+  domain: MyApp.Accounts,       # REQUIRED
+  actor: current_user,          # optional: for authorization
+  tenant: "org_123",            # optional: for multi-tenancy
+  authorize?: true,             # optional: explicit authorization mode
+  tracer: [MyApp.Tracer],       # optional: Ash tracer modules
+  scope: MyApp.Scope.for(user), # optional: Ash scope
+  context: %{request_id: "1"},  # optional: Ash action context
+  timeout: 15_000               # optional: Ash operation timeout
 }
 
 MyApp.User.Jido.Create.run(params, context)

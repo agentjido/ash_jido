@@ -140,9 +140,14 @@ The context map supports additional options for authorization and multi-tenancy:
 
 ```elixir
 context = %{
-  domain: MyApp.Accounts,    # Required: the Ash domain
-  actor: current_user,       # Optional: for authorization policies
-  tenant: "org_123"          # Optional: for multi-tenant apps
+  domain: MyApp.Accounts,       # Required: the Ash domain
+  actor: current_user,          # Optional: for authorization policies
+  tenant: "org_123",            # Optional: for multi-tenant apps
+  authorize?: true,             # Optional: explicit authorization mode
+  tracer: [MyApp.Tracer],       # Optional: Ash tracer modules
+  scope: MyApp.Scope.for(user), # Optional: Ash scope
+  context: %{request_id: "1"},  # Optional: Ash action context
+  timeout: 15_000               # Optional: Ash operation timeout
 }
 
 MyApp.Accounts.User.Jido.Register.run(params, context)

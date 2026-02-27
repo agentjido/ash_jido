@@ -79,15 +79,8 @@ defmodule AshJido.Generator do
         @jido_config unquote(Macro.escape(jido_action))
 
         def run(params, context) do
-          domain = context[:domain]
-
-          unless domain do
-            raise ArgumentError,
-                  "AshJido: :domain must be provided in context for #{inspect(@resource)}.#{@ash_action}"
-          end
-
-          actor = context[:actor]
-          tenant = context[:tenant]
+          ash_opts = AshJido.Context.extract_ash_opts!(context, @resource, @ash_action)
+          domain = ash_opts[:domain]
 
           # Execute the Ash action
           try do
@@ -95,24 +88,16 @@ defmodule AshJido.Generator do
               :create ->
                 result =
                   @resource
-                  |> Ash.Changeset.for_create(@ash_action, params,
-                    actor: actor,
-                    tenant: tenant,
-                    domain: domain
-                  )
-                  |> Ash.create!(actor: actor, tenant: tenant, domain: domain)
+                  |> Ash.Changeset.for_create(@ash_action, params, ash_opts)
+                  |> Ash.create!(ash_opts)
 
                 {:ok, result} |> AshJido.Mapper.wrap_result(@jido_config)
 
               :read ->
                 result =
                   @resource
-                  |> Ash.Query.for_read(@ash_action, params,
-                    actor: actor,
-                    tenant: tenant,
-                    domain: domain
-                  )
-                  |> Ash.read!(actor: actor, tenant: tenant, domain: domain)
+                  |> Ash.Query.for_read(@ash_action, params, ash_opts)
+                  |> Ash.read!(ash_opts)
 
                 # Ash.read! returns a raw list, not {:ok, result}
                 # Pass it directly to Mapper.wrap_result which will wrap it
@@ -132,17 +117,13 @@ defmodule AshJido.Generator do
                 # Load the record first
                 record =
                   @resource
-                  |> Ash.get!(record_id, domain: domain, actor: actor, tenant: tenant)
+                  |> Ash.get!(record_id, ash_opts)
 
                 # Update the record
                 result =
                   record
-                  |> Ash.Changeset.for_update(@ash_action, update_params,
-                    actor: actor,
-                    tenant: tenant,
-                    domain: domain
-                  )
-                  |> Ash.update!(actor: actor, tenant: tenant, domain: domain)
+                  |> Ash.Changeset.for_update(@ash_action, update_params, ash_opts)
+                  |> Ash.update!(ash_opts)
 
                 {:ok, result} |> AshJido.Mapper.wrap_result(@jido_config)
 
@@ -157,18 +138,14 @@ defmodule AshJido.Generator do
                 # Load the record first
                 record =
                   @resource
-                  |> Ash.get!(record_id, domain: domain, actor: actor, tenant: tenant)
+                  |> Ash.get!(record_id, ash_opts)
 
                 # Destroy the record
                 # Ash.destroy! returns :ok atom, pass it directly to Mapper
                 :ok =
                   record
-                  |> Ash.Changeset.for_destroy(@ash_action, %{},
-                    actor: actor,
-                    tenant: tenant,
-                    domain: domain
-                  )
-                  |> Ash.destroy!(actor: actor, tenant: tenant, domain: domain)
+                  |> Ash.Changeset.for_destroy(@ash_action, %{}, ash_opts)
+                  |> Ash.destroy!(ash_opts)
 
                 # Pass :ok directly to Mapper which will convert to {:ok, nil}
                 AshJido.Mapper.wrap_result(:ok, @jido_config)
@@ -176,12 +153,8 @@ defmodule AshJido.Generator do
               :action ->
                 result =
                   @resource
-                  |> Ash.ActionInput.for_action(@ash_action, params,
-                    actor: actor,
-                    tenant: tenant,
-                    domain: domain
-                  )
-                  |> Ash.run_action!()
+                  |> Ash.ActionInput.for_action(@ash_action, params, ash_opts)
+                  |> Ash.run_action!(ash_opts)
 
                 {:ok, result} |> AshJido.Mapper.wrap_result(@jido_config)
             end

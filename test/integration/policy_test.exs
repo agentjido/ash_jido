@@ -8,6 +8,16 @@ defmodule AshJido.PolicyTest do
   alias AshJido.Test.{Domain, ProtectedResource}
 
   describe "policy enforcement" do
+    test "create action can bypass authorization when authorize? is false in context" do
+      params = %{title: "Bypassed Policy"}
+      context = %{domain: Domain, actor: nil, authorize?: false}
+
+      result = ProtectedResource.Jido.Create.run(params, context)
+
+      assert {:ok, resource} = result
+      assert resource[:title] == "Bypassed Policy"
+    end
+
     test "create action fails without actor when policy requires actor_present" do
       params = %{title: "Secret Document"}
       context = %{domain: Domain, actor: nil}
