@@ -342,6 +342,65 @@ defmodule AshJido.GuideExamplesTest do
     end
   end
 
+  describe "failure semantics walkthrough" do
+    test "missing domain raises argument error" do
+      assert_raise ArgumentError, ~r/AshJido: :domain must be provided in context/, fn ->
+        Post.Jido.Read.run(%{}, %{})
+      end
+    end
+
+    test "missing id for update action returns a deterministic error" do
+      assert {:error, %Jido.Action.Error.ExecutionFailureError{} = error} =
+               Post.Jido.Publish.run(%{}, %{domain: Domain})
+
+      assert error.message == "Update actions require an 'id' parameter"
+    end
+
+    test "missing dispatch config returns invalid input when signaling is enabled" do
+      author =
+        Author
+        |> Ash.Changeset.for_create(:create, %{name: "Missing Dispatch Author"}, domain: Domain)
+        |> Ash.create!(domain: Domain)
+
+      assert {:error, %Jido.Action.Error.InvalidInputError{} = error} =
+               Post.Jido.Create.run(
+                 %{title: "Missing Dispatch", author_id: author.id},
+                 %{domain: Domain, signal_dispatch: nil}
+               )
+
+      assert String.contains?(error.message, "signal dispatch configuration is required")
+    end
+
+    test "dispatch failures preserve action success and increment telemetry failure counters" do
+      flush_telemetry_messages()
+      handler_id = attach_telemetry_handler(self())
+      on_exit(fn -> :telemetry.detach(handler_id) end)
+
+      author =
+        Author
+        |> Ash.Changeset.for_create(:create, %{name: "Dispatch Failure Author"}, domain: Domain)
+        |> Ash.create!(domain: Domain)
+
+      missing_named_dispatch =
+        {:named, [target: {:name, :ash_jido_missing_target}, delivery_mode: :sync]}
+
+      assert {:ok, created} =
+               Post.Jido.Create.run(
+                 %{title: "Dispatch Failure Post", author_id: author.id},
+                 %{domain: Domain, signal_dispatch: missing_named_dispatch}
+               )
+
+      assert created[:title] == "Dispatch Failure Post"
+
+      assert_receive {:telemetry_event, [:jido, :action, :ash_jido, :start], _start, _start_meta}
+      assert_receive {:telemetry_event, [:jido, :action, :ash_jido, :stop], _stop, stop_meta}
+      assert stop_meta.result_status == :ok
+      assert stop_meta.signal_failed_count >= 1
+      assert is_list(stop_meta.signal_failures)
+      assert length(stop_meta.signal_failures) >= 1
+    end
+  end
+
   defp attach_telemetry_handler(test_pid) do
     handler_id = {__MODULE__, make_ref()}
 

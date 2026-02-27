@@ -118,6 +118,7 @@ defmodule AshJido.MixProject do
         "guides/getting-started.md",
         "guides/walkthrough-policy-scope-auth.md",
         "guides/walkthrough-ash-postgres-consumer.md",
+        "guides/walkthrough-failure-semantics.md",
         "guides/walkthrough-resource-to-action.md",
         "guides/walkthrough-signals-telemetry-sensors.md",
         "guides/walkthrough-tools-and-ai.md",

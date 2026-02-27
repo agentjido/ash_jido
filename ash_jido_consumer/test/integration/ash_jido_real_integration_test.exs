@@ -388,6 +388,24 @@ defmodule AshJidoConsumer.RealIntegrationTest do
     end
   end
 
+  describe "failure semantics" do
+    test "missing domain raises an argument error for generated actions" do
+      assert_raise ArgumentError, ~r/AshJido: :domain must be provided in context/, fn ->
+        User.Jido.Read.run(%{}, %{})
+      end
+    end
+
+    test "update actions require id and return deterministic errors when missing" do
+      assert {:error, %Jido.Action.Error.ExecutionFailureError{} = error} =
+               Post.Jido.Update.run(
+                 %{title: "Missing ID"},
+                 %{domain: Content, signal_dispatch: {:noop, []}}
+               )
+
+      assert error.message == "Update actions require an 'id' parameter"
+    end
+  end
+
   describe "sensor bridge" do
     test "dispatched signals can be forwarded to a sensor runtime using supported envelopes" do
       {:ok, sensor_runtime} =

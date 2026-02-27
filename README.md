@@ -215,6 +215,8 @@ AshJido.Tools.tools(MyApp.Accounts.User)
 **`Action X not found in resource`**
 - Check `jido action :...` entries match defined Ash actions
 
+For a full error contract and telemetry interpretation, see [Walkthrough: Failure Semantics](guides/walkthrough-failure-semantics.md).
+
 ## Compatibility
 
 - Elixir: ~> 1.18
@@ -226,6 +228,7 @@ AshJido.Tools.tools(MyApp.Accounts.User)
 - [Getting Started](guides/getting-started.md) — comprehensive usage
 - [Walkthrough: Policy, Scope, and Authorization](guides/walkthrough-policy-scope-auth.md) — policy-aware actor, scope, tenant patterns
 - [Walkthrough: AshPostgres Consumer Harness](guides/walkthrough-ash-postgres-consumer.md) — real DB-backed integration scenarios
+- [Walkthrough: Failure Semantics](guides/walkthrough-failure-semantics.md) — deterministic errors and telemetry outcomes
 - [Walkthrough: Resource to Action](guides/walkthrough-resource-to-action.md) — define resources and run generated actions
 - [Walkthrough: Signals, Telemetry, and Sensors](guides/walkthrough-signals-telemetry-sensors.md) — notification signals and observability
 - [Walkthrough: Tools and AI Integration](guides/walkthrough-tools-and-ai.md) — action metadata and tool export
