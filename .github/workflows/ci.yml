@@ -22,3 +22,52 @@ jobs:
       otp_versions: '["26", "27"]'
       elixir_versions: '["1.17", "1.18"]'
       test_command: mix test
+
+  consumer-integration:
+    name: Consumer Integration (AshPostgres)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: ash_jido_consumer_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d ash_jido_consumer_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      MIX_ENV: test
+      ASH_JIDO_CONSUMER_DB_HOST: 127.0.0.1
+      ASH_JIDO_CONSUMER_DB_PORT: "5432"
+      ASH_JIDO_CONSUMER_DB_USER: postgres
+      ASH_JIDO_CONSUMER_DB_PASS: postgres
+      ASH_JIDO_CONSUMER_DB_NAME: ash_jido_consumer_test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Elixir
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: "27"
+          elixir-version: "1.18.4"
+
+      - name: Install dependencies
+        working-directory: ash_jido_consumer
+        run: mix deps.get
+
+      - name: Check formatting
+        working-directory: ash_jido_consumer
+        run: mix format --check-formatted
+
+      - name: Run consumer integration tests
+        working-directory: ash_jido_consumer
+        run: mix test
