@@ -51,7 +51,7 @@ defmodule AshJido do
       jido do
         action :create
         action :read, name: "list_users", description: "List all users", load: [:profile]
-        action :update, tags: ["user-management"]
+        action :update, category: "ash.update", tags: ["user-management"], vsn: "1.0.0"
         action :special, output_map?: false
       end
 
@@ -61,7 +61,7 @@ defmodule AshJido do
         all_actions
         all_actions except: [:destroy]
         all_actions only: [:create, :read]
-        all_actions tags: ["public-api"]
+        all_actions category: "ash.resource", tags: ["public-api"], vsn: "1.0.0"
         all_actions only: [:read], read_load: [:profile]
       end
 
@@ -70,7 +70,9 @@ defmodule AshJido do
   - `name` - Custom Jido action name (default: auto-generated, e.g. `"create_user"`)
   - `module_name` - Custom module name (default: `Resource.Jido.ActionName`)
   - `description` - Action description (default: from Ash action)
+  - `category` - Category for discovery/tool organization
   - `tags` - List of tags for categorization (default: `[]`)
+  - `vsn` - Optional semantic version identifier for generated action metadata
   - `output_map?` - Convert output structs to maps (default: `true`)
   - `load` - Static `Ash.Query.load/2` statement for read actions (default: `nil`)
   - `emit_signals?` - Emit Jido signals from Ash notifications on create/update/destroy (default: `false`)
@@ -94,6 +96,7 @@ defmodule AshJido do
 
   - [Getting Started Guide](guides/getting-started.md)
   - [Usage Rules](usage-rules.md)
+  - `AshJido.Tools` for listing generated actions and exporting `to_tool/0` payloads
   """
 
   @sections [AshJido.Resource.Dsl.jido_section()]

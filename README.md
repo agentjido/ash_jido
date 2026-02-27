@@ -91,7 +91,7 @@ MyApp.User.Jido.Create.run(params, context)
 jido do
   action :create
   action :read, name: "list_users", description: "List all users", load: [:profile]
-  action :update, tags: ["user-management"]
+  action :update, category: "ash.update", tags: ["user-management"], vsn: "1.0.0"
   action :special, output_map?: false  # preserve Ash structs
 end
 ```
@@ -103,7 +103,9 @@ jido do
   all_actions
   all_actions except: [:destroy, :internal]
   all_actions only: [:create, :read]
+  all_actions category: "ash.resource"
   all_actions tags: ["public-api"]
+  all_actions vsn: "1.0.0"
   all_actions only: [:read], read_load: [:profile]
 end
 ```
@@ -115,7 +117,9 @@ end
 | `name` | string | auto-generated | Custom Jido action name |
 | `module_name` | atom | `Resource.Jido.Action` | Custom module name |
 | `description` | string | from Ash action | Action description |
+| `category` | string | `nil` | Category for discovery/tool organization |
 | `tags` | list(string) | `[]` | Tags for categorization |
+| `vsn` | string | `nil` | Optional semantic version metadata |
 | `output_map?` | boolean | `true` | Convert structs to maps |
 | `load` | term | `nil` | Static `Ash.Query.load/2` for read actions |
 | `emit_signals?` | boolean | `false` | Emit Jido signals from Ash notifications (create/update/destroy) |
@@ -130,7 +134,9 @@ end
 |--------|------|---------|-------------|
 | `only` | list(atom) | all actions | Limit generated actions |
 | `except` | list(atom) | `[]` | Exclude actions |
+| `category` | string | `ash.<action_type>` | Category added to generated actions |
 | `tags` | list(string) | `[]` | Tags added to all generated actions |
+| `vsn` | string | `nil` | Optional semantic version metadata for generated actions |
 | `read_load` | term | `nil` | Static `Ash.Query.load/2` for generated read actions |
 | `emit_signals?` | boolean | `false` | Emit Jido signals from generated create/update/destroy actions |
 | `signal_dispatch` | term | `nil` | Default signal dispatch config for generated actions |
@@ -155,6 +161,21 @@ When enabled, generated actions emit:
 - `[:jido, :action, :ash_jido, :exception]`
 
 Metadata includes resource/action/module identity, domain/tenant, actor presence, signaling/read-load flags, and signal delivery counters.
+
+## Tool Export Helpers
+
+Use `AshJido.Tools` to list generated actions and export LLM-friendly tool maps:
+
+```elixir
+# Generated action modules for a resource
+AshJido.Tools.actions(MyApp.Accounts.User)
+
+# Generated action modules for all resources in a domain
+AshJido.Tools.actions(MyApp.Accounts)
+
+# Tool payloads (name/description/schema/function) for agent/LLM integrations
+AshJido.Tools.tools(MyApp.Accounts.User)
+```
 
 ### Default Naming
 
@@ -188,6 +209,17 @@ Metadata includes resource/action/module identity, domain/tenant, actor presence
 - [Getting Started](guides/getting-started.md) — comprehensive usage
 - [Interactive Demo](guides/ash-jido-demo.livemd) — try in Livebook
 - [Usage Rules](usage-rules.md) — AI/LLM patterns
+
+## Real Consumer Integration App
+
+A full AshPostgres-backed consumer harness lives at `ash_jido_consumer/`.
+
+It exercises real integration scenarios end-to-end:
+
+- context passthrough + policy behavior
+- relationship-aware reads (`load`)
+- notifications to signals (`emit_signals?`)
+- Jido telemetry emission (`telemetry?`)
 
 ## License
 

@@ -6,7 +6,9 @@ defmodule AshJido.Resource.AllActions do
   defstruct [
     :except,
     :only,
+    :category,
     :tags,
+    :vsn,
     :read_load,
     :signal_dispatch,
     :signal_type,
@@ -19,7 +21,9 @@ defmodule AshJido.Resource.AllActions do
   @type t :: %__MODULE__{
           except: [atom()] | nil,
           only: [atom()] | nil,
+          category: String.t() | nil,
           tags: [String.t()] | nil,
+          vsn: String.t() | nil,
           read_load: term() | nil,
           signal_dispatch: term() | nil,
           signal_type: String.t() | nil,

@@ -23,6 +23,9 @@ defmodule AshJido.ResourceTest do
     test "JidoAction struct has required fields" do
       jido_action = %AshJido.Resource.JidoAction{action: :test}
       assert jido_action.action == :test
+      assert jido_action.category == nil
+      assert jido_action.tags == nil
+      assert jido_action.vsn == nil
       assert jido_action.output_map? == true
       assert jido_action.emit_signals? == false
       assert jido_action.telemetry? == false
@@ -33,6 +36,9 @@ defmodule AshJido.ResourceTest do
 
       assert all_actions.emit_signals? == false
       assert all_actions.telemetry? == false
+      assert all_actions.category == nil
+      assert all_actions.tags == nil
+      assert all_actions.vsn == nil
     end
   end
 end

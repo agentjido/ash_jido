@@ -171,7 +171,9 @@ Each action in the `jido` section supports these options:
 | `name` | `string` | `"resource_action"` | Custom name for the Jido action |
 | `module_name` | `atom` | `Resource.Jido.ActionName` | Custom module name for the generated action |
 | `description` | `string` | Ash action description | Description for AI discovery and documentation |
+| `category` | `string` | `nil` | Category for discovery/tool organization |
 | `tags` | `list(string)` | `[]` | Tags for categorization and AI discovery |
+| `vsn` | `string` | `nil` | Optional semantic version metadata |
 | `output_map?` | `boolean` | `true` | Convert output structs to maps |
 | `load` | `term` | `nil` | Static `Ash.Query.load/2` statement for read actions |
 | `emit_signals?` | `boolean` | `false` | Emit Jido signals from Ash notifications (create/update/destroy) |
@@ -180,8 +182,13 @@ Each action in the `jido` section supports these options:
 | `signal_source` | `string` | derived | Override emitted signal source |
 | `telemetry?` | `boolean` | `false` | Emit Jido-namespaced telemetry for generated action execution |
 
-`all_actions` additionally supports `read_load` to apply a static load statement to generated read actions.
-`all_actions` also supports `emit_signals?`, `signal_dispatch`, `signal_type`, `signal_source`, and `telemetry?`.
+`all_actions` additionally supports:
+
+- `read_load` for static read relationship loading
+- `category` (default `ash.<action_type>`)
+- `tags`
+- `vsn`
+- `emit_signals?`, `signal_dispatch`, `signal_type`, `signal_source`, and `telemetry?`
 
 ### Telemetry
 
@@ -213,7 +220,10 @@ jido do
     load: [:profile]
 
   # Add tags for categorization
-  action :update, tags: ["user-management", "data-modification"]
+  action :update,
+    category: "ash.update",
+    tags: ["user-management", "data-modification"],
+    vsn: "1.0.0"
 
   # Custom module name
   action :promote, module_name: MyApp.Actions.PromoteUser
@@ -221,6 +231,16 @@ jido do
   # Disable output map conversion (keep Ash structs)
   action :special, output_map?: false
 end
+```
+
+## Tool Export Helpers
+
+Use `AshJido.Tools` when integrating generated actions with tool-oriented agent systems:
+
+```elixir
+AshJido.Tools.actions(MyApp.Accounts.User)
+AshJido.Tools.actions(MyApp.Accounts)
+AshJido.Tools.tools(MyApp.Accounts.User)
 ```
 
 ## Output Formats

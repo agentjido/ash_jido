@@ -68,11 +68,19 @@ defmodule AshJido.Resource.Dsl do
               doc:
                 "Description for the Jido action. Inherits from Ash action description if available"
             ],
+            category: [
+              type: :string,
+              doc: "Category for Jido discovery and tool organization"
+            ],
             tags: [
               type: {:list, :string},
               default: [],
               doc:
                 "Tags for better categorization and AI discovery. Auto-generates smart defaults"
+            ],
+            vsn: [
+              type: :string,
+              doc: "Optional semantic version identifier for generated action metadata"
             ],
             output_map?: [
               type: :boolean,
@@ -138,10 +146,19 @@ defmodule AshJido.Resource.Dsl do
               type: {:list, :atom},
               doc: "If specified, only generate actions for these action names"
             ],
+            category: [
+              type: :string,
+              doc:
+                "Category override applied to generated actions. Defaults to ash.<action_type> when omitted"
+            ],
             tags: [
               type: {:list, :string},
               default: [],
               doc: "Additional tags to add to all generated actions"
+            ],
+            vsn: [
+              type: :string,
+              doc: "Optional semantic version identifier applied to generated action metadata"
             ],
             read_load: [
               type: :any,

@@ -58,8 +58,22 @@ defmodule AshJido.Generator do
     description =
       jido_action.description || ash_action.description || "Ash action: #{ash_action.name}"
 
+    tags = jido_action.tags || []
+    category = jido_action.category
+    vsn = jido_action.vsn
+
     # Build input schema including accepted attributes
     schema = build_parameter_schema(resource, ash_action, dsl_state)
+
+    action_use_opts =
+      [
+        name: action_name,
+        description: description,
+        tags: tags,
+        schema: schema
+      ]
+      |> maybe_put_option(:category, category)
+      |> maybe_put_option(:vsn, vsn)
 
     quote do
       defmodule unquote(module_name) do
@@ -69,10 +83,7 @@ defmodule AshJido.Generator do
         Wraps the Ash action; see the resource docs for semantics.
         """
 
-        use Jido.Action,
-          name: unquote(action_name),
-          description: unquote(description),
-          schema: unquote(Macro.escape(schema))
+        use Jido.Action, unquote(Macro.escape(action_use_opts))
 
         @resource unquote(resource)
         @ash_action unquote(ash_action.name)
@@ -445,4 +456,7 @@ defmodule AshJido.Generator do
         word <> "s"
     end
   end
+
+  defp maybe_put_option(opts, _key, nil), do: opts
+  defp maybe_put_option(opts, key, value), do: Keyword.put(opts, key, value)
 end
