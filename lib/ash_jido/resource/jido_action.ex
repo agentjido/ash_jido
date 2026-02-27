@@ -10,7 +10,11 @@ defmodule AshJido.Resource.JidoAction do
     :description,
     :tags,
     :load,
+    :signal_dispatch,
+    :signal_type,
+    :signal_source,
     :__spark_metadata__,
+    emit_signals?: false,
     output_map?: true
   ]
 
@@ -21,6 +25,10 @@ defmodule AshJido.Resource.JidoAction do
           description: String.t() | nil,
           tags: [String.t()] | nil,
           load: term() | nil,
+          signal_dispatch: term() | nil,
+          signal_type: String.t() | nil,
+          signal_source: String.t() | nil,
+          emit_signals?: boolean(),
           output_map?: boolean()
         }
 end

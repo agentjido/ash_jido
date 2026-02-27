@@ -78,6 +78,10 @@ defmodule AshJido.Resource.Transformers.GenerateJidoActions do
         # Additional tags from all_actions
         tags: all_actions.tags || [],
         load: if(ash_action.type == :read, do: all_actions.read_load),
+        emit_signals?: all_actions.emit_signals? || false,
+        signal_dispatch: all_actions.signal_dispatch,
+        signal_type: all_actions.signal_type,
+        signal_source: all_actions.signal_source,
         output_map?: true
       }
     end)

@@ -155,7 +155,8 @@ context = %{
   tracer: [MyApp.Tracer],       # Optional: Ash tracer modules
   scope: MyApp.Scope.for(user), # Optional: Ash scope
   context: %{request_id: "1"},  # Optional: Ash action context
-  timeout: 15_000               # Optional: Ash operation timeout
+  timeout: 15_000,              # Optional: Ash operation timeout
+  signal_dispatch: {:pid, target: self()} # Optional: override signal dispatch
 }
 
 MyApp.Accounts.User.Jido.Register.run(params, context)
@@ -173,8 +174,13 @@ Each action in the `jido` section supports these options:
 | `tags` | `list(string)` | `[]` | Tags for categorization and AI discovery |
 | `output_map?` | `boolean` | `true` | Convert output structs to maps |
 | `load` | `term` | `nil` | Static `Ash.Query.load/2` statement for read actions |
+| `emit_signals?` | `boolean` | `false` | Emit Jido signals from Ash notifications (create/update/destroy) |
+| `signal_dispatch` | `term` | `nil` | Default signal dispatch config (overridable via context) |
+| `signal_type` | `string` | derived | Override emitted signal type |
+| `signal_source` | `string` | derived | Override emitted signal source |
 
 `all_actions` additionally supports `read_load` to apply a static load statement to generated read actions.
+`all_actions` also supports `emit_signals?`, `signal_dispatch`, `signal_type`, and `signal_source`.
 
 ### Examples
 

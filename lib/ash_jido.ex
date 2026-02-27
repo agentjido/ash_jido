@@ -42,7 +42,8 @@ defmodule AshJido do
         tracer: [MyApp.Tracer],       # optional: Ash tracer modules
         scope: MyApp.Scope.for(user), # optional: Ash scope
         context: %{request_id: "1"},  # optional: Ash action context
-        timeout: 15_000               # optional: Ash operation timeout
+        timeout: 15_000,              # optional: Ash operation timeout
+        signal_dispatch: {:pid, target: self()} # optional: override signal dispatch
       }
 
   ## DSL: Individual Actions
@@ -72,6 +73,10 @@ defmodule AshJido do
   - `tags` - List of tags for categorization (default: `[]`)
   - `output_map?` - Convert output structs to maps (default: `true`)
   - `load` - Static `Ash.Query.load/2` statement for read actions (default: `nil`)
+  - `emit_signals?` - Emit Jido signals from Ash notifications on create/update/destroy (default: `false`)
+  - `signal_dispatch` - Default dispatch configuration for emitted signals (default: `nil`)
+  - `signal_type` - Override emitted signal type (default: derived)
+  - `signal_source` - Override emitted signal source (default: derived)
 
   ## Default Naming
 

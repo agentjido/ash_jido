@@ -82,6 +82,24 @@ defmodule AshJido.Resource.Dsl do
             load: [
               type: :any,
               doc: "Static Ash.Query.load statement to apply to generated read actions"
+            ],
+            emit_signals?: [
+              type: :boolean,
+              default: false,
+              doc: "Emit Jido signals from Ash notifications for create/update/destroy actions"
+            ],
+            signal_dispatch: [
+              type: :any,
+              doc:
+                "Default dispatch configuration for emitted signals (override with context[:signal_dispatch])"
+            ],
+            signal_type: [
+              type: :string,
+              doc: "Override the emitted signal type"
+            ],
+            signal_source: [
+              type: :string,
+              doc: "Override the emitted signal source"
             ]
           ]
         },
@@ -123,6 +141,25 @@ defmodule AshJido.Resource.Dsl do
             read_load: [
               type: :any,
               doc: "Static Ash.Query.load statement applied to all auto-generated read actions"
+            ],
+            emit_signals?: [
+              type: :boolean,
+              default: false,
+              doc:
+                "Emit Jido signals from Ash notifications for generated create/update/destroy actions"
+            ],
+            signal_dispatch: [
+              type: :any,
+              doc:
+                "Default dispatch configuration for emitted signals (override with context[:signal_dispatch])"
+            ],
+            signal_type: [
+              type: :string,
+              doc: "Override emitted signal type for generated actions"
+            ],
+            signal_source: [
+              type: :string,
+              doc: "Override emitted signal source for generated actions"
             ]
           ]
         }

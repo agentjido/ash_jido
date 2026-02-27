@@ -76,7 +76,8 @@ context = %{
   tracer: [MyApp.Tracer],       # optional: Ash tracer modules
   scope: MyApp.Scope.for(user), # optional: Ash scope
   context: %{request_id: "1"},  # optional: Ash action context
-  timeout: 15_000               # optional: Ash operation timeout
+  timeout: 15_000,              # optional: Ash operation timeout
+  signal_dispatch: {:pid, target: self()} # optional: override signal dispatch
 }
 
 MyApp.User.Jido.Create.run(params, context)
@@ -117,6 +118,10 @@ end
 | `tags` | list(string) | `[]` | Tags for categorization |
 | `output_map?` | boolean | `true` | Convert structs to maps |
 | `load` | term | `nil` | Static `Ash.Query.load/2` for read actions |
+| `emit_signals?` | boolean | `false` | Emit Jido signals from Ash notifications (create/update/destroy) |
+| `signal_dispatch` | term | `nil` | Default signal dispatch config (can be overridden via context) |
+| `signal_type` | string | derived | Override emitted signal type |
+| `signal_source` | string | derived | Override emitted signal source |
 
 ### all_actions Options
 
@@ -126,6 +131,10 @@ end
 | `except` | list(atom) | `[]` | Exclude actions |
 | `tags` | list(string) | `[]` | Tags added to all generated actions |
 | `read_load` | term | `nil` | Static `Ash.Query.load/2` for generated read actions |
+| `emit_signals?` | boolean | `false` | Emit Jido signals from generated create/update/destroy actions |
+| `signal_dispatch` | term | `nil` | Default signal dispatch config for generated actions |
+| `signal_type` | string | derived | Override emitted signal type |
+| `signal_source` | string | derived | Override emitted signal source |
 
 ### Default Naming
 

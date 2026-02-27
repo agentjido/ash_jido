@@ -8,13 +8,21 @@ defmodule AshJido.Resource.AllActions do
     :only,
     :tags,
     :read_load,
-    :__spark_metadata__
+    :signal_dispatch,
+    :signal_type,
+    :signal_source,
+    :__spark_metadata__,
+    emit_signals?: false
   ]
 
   @type t :: %__MODULE__{
           except: [atom()] | nil,
           only: [atom()] | nil,
           tags: [String.t()] | nil,
-          read_load: term() | nil
+          read_load: term() | nil,
+          signal_dispatch: term() | nil,
+          signal_type: String.t() | nil,
+          signal_source: String.t() | nil,
+          emit_signals?: boolean()
         }
 end
