@@ -43,6 +43,9 @@ mix test
 
 `mix test` runs `ecto.create` + `ecto.migrate` first via aliases.
 
+Canonical guide:
+- [AshPostgres Consumer Harness Walkthrough](../guides/walkthrough-ash-postgres-consumer.md)
+
 ## Coverage
 
 `mix test --cover` is supported for this harness. Coverage output ignores generated `*.Jido.*` modules so nofile-generated code does not skew summary or fail reporting.

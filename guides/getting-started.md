@@ -25,6 +25,7 @@ mix deps.get
 For focused end-to-end examples, use these guides alongside this reference:
 
 - [Walkthrough: Policy, Scope, and Authorization](walkthrough-policy-scope-auth.md)
+- [Walkthrough: AshPostgres Consumer Harness](walkthrough-ash-postgres-consumer.md)
 - [Walkthrough: Resource to Action](walkthrough-resource-to-action.md)
 - [Walkthrough: Signals, Telemetry, and Sensors](walkthrough-signals-telemetry-sensors.md)
 - [Walkthrough: Tools and AI Integration](walkthrough-tools-and-ai.md)
