@@ -267,6 +267,10 @@ defmodule AshJido.GuideExamplesTest do
       actions = AshJido.Tools.actions(Post)
       assert Post.Jido.Create in actions
 
+      domain_actions = AshJido.Tools.actions(Domain)
+      assert Post.Jido.Create in domain_actions
+      assert Post.Jido.Publish in domain_actions
+
       assert Post.Jido.Create.tags() == ["guide", "content"]
       assert Post.Jido.Create.category() == "ash.create"
       assert Post.Jido.Create.vsn() == "1.0.0"
@@ -286,6 +290,15 @@ defmodule AshJido.GuideExamplesTest do
       assert {:ok, decoded} = Jason.decode(json)
       assert decoded["name"] == "Tool User"
       assert decoded["email"] == "tool-user@example.com"
+
+      assert {:error, error_json} =
+               create_user_tool.function.(%{"name" => "Missing Email"}, %{
+                 domain: AshJido.Test.Domain
+               })
+
+      assert {:ok, error_payload} = Jason.decode(error_json)
+      assert is_binary(error_payload["error"])
+      assert String.contains?(error_payload["error"], "InvalidInputError")
     end
   end
 

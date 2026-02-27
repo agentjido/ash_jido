@@ -23,6 +23,26 @@ jobs:
       elixir_versions: '["1.17", "1.18"]'
       test_command: mix test
 
+  docs:
+    name: Docs
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Elixir
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: "27"
+          elixir-version: "1.18.4"
+
+      - name: Install dependencies
+        run: mix deps.get
+
+      - name: Build docs
+        run: mix docs
+
   consumer-integration:
     name: Consumer Integration (AshPostgres)
     runs-on: ubuntu-latest
