@@ -13,21 +13,23 @@ defmodule AshJido.Context do
   end
 
   defp base_opts(context, domain) do
-    [
-      actor: Map.get(context, :actor),
-      tenant: Map.get(context, :tenant),
-      domain: domain
-    ]
+    [domain: domain]
+    |> maybe_add_if_present(context, :actor)
+    |> maybe_add_if_present(context, :tenant)
   end
 
   defp maybe_add_optional_passthroughs(ash_opts, context) do
     Enum.reduce(@optional_passthrough_keys, ash_opts, fn key, opts ->
-      if Map.has_key?(context, key) do
-        Keyword.put(opts, key, Map.get(context, key))
-      else
-        opts
-      end
+      maybe_add_if_present(opts, context, key)
     end)
+  end
+
+  defp maybe_add_if_present(opts, context, key) do
+    if Map.has_key?(context, key) do
+      Keyword.put(opts, key, Map.get(context, key))
+    else
+      opts
+    end
   end
 
   defp require_domain!(context, resource, action_name) do

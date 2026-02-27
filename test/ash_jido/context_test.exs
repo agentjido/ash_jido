@@ -52,13 +52,42 @@ defmodule AshJido.ContextTest do
         )
 
       assert opts[:domain] == AshJido.Test.Domain
-      assert Keyword.has_key?(opts, :actor)
-      assert Keyword.has_key?(opts, :tenant)
+      refute Keyword.has_key?(opts, :actor)
+      refute Keyword.has_key?(opts, :tenant)
       refute Keyword.has_key?(opts, :authorize?)
       refute Keyword.has_key?(opts, :tracer)
       refute Keyword.has_key?(opts, :scope)
       refute Keyword.has_key?(opts, :context)
       refute Keyword.has_key?(opts, :timeout)
+    end
+
+    test "preserves explicit actor and tenant override keys when values are nil" do
+      opts =
+        Context.extract_ash_opts!(
+          %{domain: AshJido.Test.Domain, actor: nil, tenant: nil},
+          AshJido.Test.User,
+          :read
+        )
+
+      assert opts[:domain] == AshJido.Test.Domain
+      assert Keyword.has_key?(opts, :actor)
+      assert Keyword.has_key?(opts, :tenant)
+      assert opts[:actor] == nil
+      assert opts[:tenant] == nil
+    end
+
+    test "does not inject actor and tenant when only scope is provided" do
+      opts =
+        Context.extract_ash_opts!(
+          %{domain: AshJido.Test.Domain, scope: %{actor: %{id: "actor_1"}}},
+          AshJido.Test.User,
+          :read
+        )
+
+      assert opts[:domain] == AshJido.Test.Domain
+      assert opts[:scope] == %{actor: %{id: "actor_1"}}
+      refute Keyword.has_key?(opts, :actor)
+      refute Keyword.has_key?(opts, :tenant)
     end
   end
 end
