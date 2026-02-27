@@ -178,9 +178,26 @@ Each action in the `jido` section supports these options:
 | `signal_dispatch` | `term` | `nil` | Default signal dispatch config (overridable via context) |
 | `signal_type` | `string` | derived | Override emitted signal type |
 | `signal_source` | `string` | derived | Override emitted signal source |
+| `telemetry?` | `boolean` | `false` | Emit Jido-namespaced telemetry for generated action execution |
 
 `all_actions` additionally supports `read_load` to apply a static load statement to generated read actions.
-`all_actions` also supports `emit_signals?`, `signal_dispatch`, `signal_type`, and `signal_source`.
+`all_actions` also supports `emit_signals?`, `signal_dispatch`, `signal_type`, `signal_source`, and `telemetry?`.
+
+### Telemetry
+
+Telemetry is opt-in:
+
+```elixir
+jido do
+  action :create, telemetry?: true
+end
+```
+
+When enabled, generated actions emit:
+
+- `[:jido, :action, :ash_jido, :start]`
+- `[:jido, :action, :ash_jido, :stop]`
+- `[:jido, :action, :ash_jido, :exception]`
 
 ### Examples
 

@@ -100,6 +100,11 @@ defmodule AshJido.Resource.Dsl do
             signal_source: [
               type: :string,
               doc: "Override the emitted signal source"
+            ],
+            telemetry?: [
+              type: :boolean,
+              default: false,
+              doc: "Emit telemetry spans for generated action execution"
             ]
           ]
         },
@@ -160,6 +165,11 @@ defmodule AshJido.Resource.Dsl do
             signal_source: [
               type: :string,
               doc: "Override emitted signal source for generated actions"
+            ],
+            telemetry?: [
+              type: :boolean,
+              default: false,
+              doc: "Emit telemetry spans for generated action execution"
             ]
           ]
         }

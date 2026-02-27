@@ -24,6 +24,15 @@ defmodule AshJido.ResourceTest do
       jido_action = %AshJido.Resource.JidoAction{action: :test}
       assert jido_action.action == :test
       assert jido_action.output_map? == true
+      assert jido_action.emit_signals? == false
+      assert jido_action.telemetry? == false
+    end
+
+    test "AllActions struct has expected defaults" do
+      all_actions = %AshJido.Resource.AllActions{}
+
+      assert all_actions.emit_signals? == false
+      assert all_actions.telemetry? == false
     end
   end
 end

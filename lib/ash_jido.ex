@@ -77,6 +77,7 @@ defmodule AshJido do
   - `signal_dispatch` - Default dispatch configuration for emitted signals (default: `nil`)
   - `signal_type` - Override emitted signal type (default: derived)
   - `signal_source` - Override emitted signal source (default: derived)
+  - `telemetry?` - Emit Jido-namespaced telemetry for generated action execution (default: `false`)
 
   ## Default Naming
 

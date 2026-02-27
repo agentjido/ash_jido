@@ -15,6 +15,7 @@ defmodule AshJido.Resource.JidoAction do
     :signal_source,
     :__spark_metadata__,
     emit_signals?: false,
+    telemetry?: false,
     output_map?: true
   ]
 
@@ -29,6 +30,7 @@ defmodule AshJido.Resource.JidoAction do
           signal_type: String.t() | nil,
           signal_source: String.t() | nil,
           emit_signals?: boolean(),
+          telemetry?: boolean(),
           output_map?: boolean()
         }
 end

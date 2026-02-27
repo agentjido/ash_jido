@@ -122,6 +122,7 @@ end
 | `signal_dispatch` | term | `nil` | Default signal dispatch config (can be overridden via context) |
 | `signal_type` | string | derived | Override emitted signal type |
 | `signal_source` | string | derived | Override emitted signal source |
+| `telemetry?` | boolean | `false` | Emit Jido-namespaced telemetry for generated action execution |
 
 ### all_actions Options
 
@@ -135,6 +136,25 @@ end
 | `signal_dispatch` | term | `nil` | Default signal dispatch config for generated actions |
 | `signal_type` | string | derived | Override emitted signal type |
 | `signal_source` | string | derived | Override emitted signal source |
+| `telemetry?` | boolean | `false` | Emit Jido-namespaced telemetry for generated action execution |
+
+## Telemetry
+
+Telemetry is opt-in per action (or via `all_actions`):
+
+```elixir
+jido do
+  action :create, telemetry?: true
+end
+```
+
+When enabled, generated actions emit:
+
+- `[:jido, :action, :ash_jido, :start]`
+- `[:jido, :action, :ash_jido, :stop]`
+- `[:jido, :action, :ash_jido, :exception]`
+
+Metadata includes resource/action/module identity, domain/tenant, actor presence, signaling/read-load flags, and signal delivery counters.
 
 ### Default Naming
 

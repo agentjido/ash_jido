@@ -82,6 +82,7 @@ defmodule AshJido.Resource.Transformers.GenerateJidoActions do
         signal_dispatch: all_actions.signal_dispatch,
         signal_type: all_actions.signal_type,
         signal_source: all_actions.signal_source,
+        telemetry?: all_actions.telemetry? || false,
         output_map?: true
       }
     end)
