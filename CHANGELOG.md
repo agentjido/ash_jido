@@ -12,9 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Ash DSL extension (`AshJido`) for defining Jido actions within Ash resources
-- `AshJido.Generator` - Generates `Jido.Action` modules from Ash action definitions
-- `AshJido.TypeMapper` - Maps Ash types to Jido schema types
-- `AshJido.Mapper` - Handles data transformation between Ash and Jido formats
+- `lib/ash_jido/generator.ex` - Generates `Jido.Action` modules from Ash action definitions
+- `lib/ash_jido/type_mapper.ex` - Maps Ash types to Jido schema types
+- `lib/ash_jido/mapper.ex` - Handles data transformation between Ash and Jido formats
 - Support for action inputs, outputs, and metadata configuration
 - Compile-time code generation for Jido actions
 

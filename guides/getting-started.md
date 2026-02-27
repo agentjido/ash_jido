@@ -20,6 +20,15 @@ Then fetch dependencies:
 mix deps.get
 ```
 
+## Walkthrough Guides
+
+For focused end-to-end examples, use these guides alongside this reference:
+
+- [Walkthrough: Policy, Scope, and Authorization](walkthrough-policy-scope-auth.md)
+- [Walkthrough: Resource to Action](walkthrough-resource-to-action.md)
+- [Walkthrough: Signals, Telemetry, and Sensors](walkthrough-signals-telemetry-sensors.md)
+- [Walkthrough: Tools and AI Integration](walkthrough-tools-and-ai.md)
+
 ## Basic Usage
 
 Add the `AshJido` extension to your Ash resource and define which actions to expose in the `jido` section:
@@ -455,7 +464,7 @@ alias MyApp.Blog.Post
 )
 
 # List all posts
-{:ok, %{results: posts}} = Post.Jido.Read.run(%{}, %{domain: MyApp.Blog})
+{:ok, posts} = Post.Jido.Read.run(%{}, %{domain: MyApp.Blog})
 
 # Publish the post
 {:ok, published} = Post.Jido.Publish.run(

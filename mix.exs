@@ -114,7 +114,12 @@ defmodule AshJido.MixProject do
         "README.md",
         "CHANGELOG.md",
         "CONTRIBUTING.md",
+        "usage-rules.md",
         "guides/getting-started.md",
+        "guides/walkthrough-policy-scope-auth.md",
+        "guides/walkthrough-resource-to-action.md",
+        "guides/walkthrough-signals-telemetry-sensors.md",
+        "guides/walkthrough-tools-and-ai.md",
         "guides/ash-jido-demo.livemd"
       ],
       groups_for_extras: [

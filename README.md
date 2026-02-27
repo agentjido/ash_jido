@@ -224,6 +224,10 @@ AshJido.Tools.tools(MyApp.Accounts.User)
 ## Documentation
 
 - [Getting Started](guides/getting-started.md) — comprehensive usage
+- [Walkthrough: Policy, Scope, and Authorization](guides/walkthrough-policy-scope-auth.md) — policy-aware actor, scope, tenant patterns
+- [Walkthrough: Resource to Action](guides/walkthrough-resource-to-action.md) — define resources and run generated actions
+- [Walkthrough: Signals, Telemetry, and Sensors](guides/walkthrough-signals-telemetry-sensors.md) — notification signals and observability
+- [Walkthrough: Tools and AI Integration](guides/walkthrough-tools-and-ai.md) — action metadata and tool export
 - [Interactive Demo](guides/ash-jido-demo.livemd) — try in Livebook
 - [Usage Rules](usage-rules.md) — AI/LLM patterns
 
