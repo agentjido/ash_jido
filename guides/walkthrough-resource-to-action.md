@@ -5,6 +5,7 @@ This walkthrough shows the core AshJido flow:
 1. Define Ash resources.
 2. Expose selected actions through the `jido` DSL.
 3. Execute generated `Jido.Action` modules with runtime context.
+4. Use generated actions directly in a `Jido.AI.Agent`.
 
 ## 1. Define a Domain and Resources
 
@@ -149,3 +150,43 @@ Notes:
 - Update and destroy generated actions require `id` in params.
 - `load` is static DSL configuration for read actions only.
 - `output_map?: true` (default) returns maps instead of Ash structs.
+
+## 5. Use Generated Resource Actions in a `Jido.AI.Agent`
+
+This is the core integration demo: generated AshJido action modules can be used directly as agent tools.
+
+```elixir
+defmodule MyApp.Blog.PostAgent do
+  use Jido.AI.Agent,
+    name: "post_agent",
+    model: :fast,
+    tools: [
+      MyApp.Blog.Post.Jido.Create,
+      MyApp.Blog.Post.Jido.Read,
+      MyApp.Blog.Post.Jido.Publish
+    ],
+    tool_context: %{domain: MyApp.Blog},
+    system_prompt: "You manage blog posts. Use tools for data operations."
+end
+```
+
+```elixir
+{:ok, pid} = Jido.AgentServer.start(agent: MyApp.Blog.PostAgent)
+
+{:ok, answer} =
+  MyApp.Blog.PostAgent.ask_sync(
+    pid,
+    "Create a post titled 'Hello' for author #{author_id} and then list posts.",
+    tool_context: %{
+      domain: MyApp.Blog,
+      actor: current_user,
+      tenant: "org_123"
+    }
+  )
+```
+
+Important:
+
+- The agent `tools:` list should use generated module names (`MyApp.Blog.Post.Jido.*`).
+- Pass `domain` in `tool_context` so AshJido actions have required context.
+- Add `actor`, `tenant`, and other Ash options in `tool_context` for policy and tenancy-aware calls.

@@ -70,3 +70,23 @@ This keeps integration simple: resource DSL defines behavior once, and both runt
 - Use AshJido DSL to define action surface area and metadata.
 - Use `AshJido.Tools.tools/1` at runtime to build the tool list for your agent.
 - Route tool execution through generated `run/2` functions to preserve Ash validation, policies, and data-layer behavior.
+
+## 5. `Jido.AI.Agent` Integration Note
+
+When using `Jido.AI.Agent`, configure generated action **modules** directly in `tools:`:
+
+```elixir
+defmodule MyApp.Blog.Agent do
+  use Jido.AI.Agent,
+    name: "blog_agent",
+    model: :fast,
+    tools: [
+      MyApp.Blog.Post.Jido.Create,
+      MyApp.Blog.Post.Jido.Read,
+      MyApp.Blog.Post.Jido.Publish
+    ],
+    tool_context: %{domain: MyApp.Blog}
+end
+```
+
+Use `AshJido.Tools.actions/1` as a discovery helper while authoring. Use `AshJido.Tools.tools/1` when you need generic tool payload maps outside `Jido.AI.Agent`.
