@@ -135,7 +135,7 @@ defmodule AshJido.SignalEmissionTest do
   end
 
   describe "sensor bridge" do
-    test "forwards signal dispatch messages to a sensor runtime" do
+    test "forwards multiple supported signal envelopes to a sensor runtime" do
       {:ok, sensor_runtime} =
         Jido.Sensor.Runtime.start_link(
           sensor: CaptureSensor,
@@ -146,13 +146,92 @@ defmodule AshJido.SignalEmissionTest do
       signal =
         Jido.Signal.new!("ash_jido.sensor.forwarded", %{ok: true}, source: "/ash_jido/tests")
 
+      assert :ok = AshJido.SensorDispatchBridge.forward(signal, sensor_runtime)
       assert :ok = AshJido.SensorDispatchBridge.forward({:signal, signal}, sensor_runtime)
+      assert :ok = AshJido.SensorDispatchBridge.forward({:signal, {:ok, signal}}, sensor_runtime)
+
+      assert_receive {:sensor_event, ^signal}
+      assert_receive {:sensor_event, ^signal}
       assert_receive {:sensor_event, ^signal}
     end
 
     test "returns an error for non-signal dispatch messages" do
       assert {:error, :invalid_signal_message} =
                AshJido.SensorDispatchBridge.forward(:invalid_message, self())
+    end
+
+    test "returns runtime_unavailable when the sensor runtime pid is not alive" do
+      dead_pid =
+        spawn(fn ->
+          receive do
+          end
+        end)
+
+      Process.exit(dead_pid, :kill)
+      Process.sleep(10)
+
+      signal =
+        Jido.Signal.new!("ash_jido.sensor.dead_pid", %{ok: false}, source: "/ash_jido/tests")
+
+      assert {:error, :runtime_unavailable} =
+               AshJido.SensorDispatchBridge.forward(signal, dead_pid)
+    end
+
+    test "returns runtime_unavailable when the sensor runtime name is not registered" do
+      signal =
+        Jido.Signal.new!("ash_jido.sensor.missing_name", %{ok: false}, source: "/ash_jido/tests")
+
+      assert {:error, :runtime_unavailable} =
+               AshJido.SensorDispatchBridge.forward(signal, :ash_jido_missing_runtime)
+    end
+
+    test "forward_many reports counts and errors" do
+      {:ok, sensor_runtime} =
+        Jido.Sensor.Runtime.start_link(
+          sensor: CaptureSensor,
+          config: %{},
+          context: %{test_pid: self()}
+        )
+
+      signal =
+        Jido.Signal.new!("ash_jido.sensor.batch", %{ok: true}, source: "/ash_jido/tests")
+
+      result =
+        AshJido.SensorDispatchBridge.forward_many(
+          [signal, {:signal, signal}, :invalid_signal_message],
+          sensor_runtime
+        )
+
+      assert result.forwarded == 2
+
+      assert result.errors == [
+               %{message: :invalid_signal_message, reason: :invalid_signal_message}
+             ]
+
+      assert_receive {:sensor_event, ^signal}
+      assert_receive {:sensor_event, ^signal}
+    end
+
+    test "forward_or_ignore ignores invalid messages and returns runtime errors" do
+      {:ok, sensor_runtime} =
+        Jido.Sensor.Runtime.start_link(
+          sensor: CaptureSensor,
+          config: %{},
+          context: %{test_pid: self()}
+        )
+
+      signal =
+        Jido.Signal.new!("ash_jido.sensor.ignore", %{ok: true}, source: "/ash_jido/tests")
+
+      assert :ok = AshJido.SensorDispatchBridge.forward_or_ignore(signal, sensor_runtime)
+
+      assert :ignored =
+               AshJido.SensorDispatchBridge.forward_or_ignore(:invalid_message, sensor_runtime)
+
+      assert_receive {:sensor_event, ^signal}
+
+      assert {:error, :runtime_unavailable} =
+               AshJido.SensorDispatchBridge.forward_or_ignore(signal, :ash_jido_missing_runtime)
     end
   end
 end

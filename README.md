@@ -177,6 +177,23 @@ AshJido.Tools.actions(MyApp.Accounts)
 AshJido.Tools.tools(MyApp.Accounts.User)
 ```
 
+## Sensor Bridge
+
+`AshJido.SensorDispatchBridge` keeps the dispatch-first signal model while adding optional sensor runtime forwarding:
+
+```elixir
+# Accepts %Jido.Signal{}, {:signal, %Jido.Signal{}}, and {:signal, {:ok, %Jido.Signal{}}}
+:ok = AshJido.SensorDispatchBridge.forward(signal_message, sensor_runtime)
+
+# Batch forwarding with per-message errors
+%{forwarded: count, errors: errors} =
+  AshJido.SensorDispatchBridge.forward_many(messages, sensor_runtime)
+
+# Ignore non-signal mailbox noise safely
+:ok | :ignored | {:error, :runtime_unavailable} =
+  AshJido.SensorDispatchBridge.forward_or_ignore(message, sensor_runtime)
+```
+
 ### Default Naming
 
 | Action Type | Pattern | Example |

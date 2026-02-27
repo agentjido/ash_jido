@@ -243,6 +243,16 @@ AshJido.Tools.actions(MyApp.Accounts)
 AshJido.Tools.tools(MyApp.Accounts.User)
 ```
 
+## Sensor Bridge Helpers
+
+If you use signal dispatch targets that should also feed sensor runtimes, use `AshJido.SensorDispatchBridge`:
+
+```elixir
+AshJido.SensorDispatchBridge.forward(signal_or_message, sensor_runtime)
+AshJido.SensorDispatchBridge.forward_many(messages, sensor_runtime)
+AshJido.SensorDispatchBridge.forward_or_ignore(message, sensor_runtime)
+```
+
 ## Output Formats
 
 By default (`output_map?: true`), Ash structs are converted to plain maps for easier consumption by agents and JSON serialization.
