@@ -111,22 +111,45 @@ defmodule AshJido.MixProject do
       main: "readme",
       source_ref: "v#{@version}",
       extras: [
-        "README.md",
-        "CHANGELOG.md",
-        "CONTRIBUTING.md",
-        "usage-rules.md",
-        "guides/getting-started.md",
-        "guides/walkthrough-policy-scope-auth.md",
-        "guides/walkthrough-ash-postgres-consumer.md",
-        "guides/walkthrough-failure-semantics.md",
-        "guides/walkthrough-agent-tool-wiring.md",
-        "guides/walkthrough-resource-to-action.md",
-        "guides/walkthrough-signals-telemetry-sensors.md",
-        "guides/walkthrough-tools-and-ai.md",
-        "guides/ash-jido-demo.livemd"
+        {"README.md", title: "Home"},
+        {"guides/getting-started.md", title: "Getting Started"},
+        {"guides/ash-jido-demo.livemd", title: "Livebook Demo"},
+        {"guides/walkthrough-resource-to-action.md", title: "Resource to Action"},
+        {"guides/walkthrough-policy-scope-auth.md", title: "Policy, Scope, and Auth"},
+        {"guides/walkthrough-ash-postgres-consumer.md", title: "AshPostgres Consumer Harness"},
+        {"guides/walkthrough-signals-telemetry-sensors.md",
+         title: "Signals, Telemetry, and Sensors"},
+        {"guides/walkthrough-failure-semantics.md", title: "Failure Semantics"},
+        {"guides/walkthrough-tools-and-ai.md", title: "Tools and AI Integration"},
+        {"guides/walkthrough-agent-tool-wiring.md", title: "Agent Tool Wiring"},
+        {"CHANGELOG.md", title: "Changelog"},
+        {"CONTRIBUTING.md", title: "Contributing"},
+        {"usage-rules.md", title: "Usage Rules"}
       ],
       groups_for_extras: [
-        Guides: ~r/guides\/.*/
+        "Start Here": [
+          "README.md",
+          "guides/getting-started.md",
+          "guides/ash-jido-demo.livemd"
+        ],
+        "Walkthroughs: Core": [
+          "guides/walkthrough-resource-to-action.md",
+          "guides/walkthrough-policy-scope-auth.md",
+          "guides/walkthrough-ash-postgres-consumer.md"
+        ],
+        "Walkthroughs: Operations": [
+          "guides/walkthrough-signals-telemetry-sensors.md",
+          "guides/walkthrough-failure-semantics.md"
+        ],
+        "Walkthroughs: Agent Integration": [
+          "guides/walkthrough-tools-and-ai.md",
+          "guides/walkthrough-agent-tool-wiring.md"
+        ],
+        Project: [
+          "CHANGELOG.md",
+          "CONTRIBUTING.md",
+          "usage-rules.md"
+        ]
       ]
     ]
   end
