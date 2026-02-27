@@ -28,6 +28,11 @@ defmodule AshJido.MixProject do
       test_coverage: [
         tool: ExCoveralls,
         summary: [threshold: 90]
+      ],
+
+      # Dialyzer
+      dialyzer: [
+        plt_add_apps: [:mix]
       ]
     ]
   end
