@@ -89,7 +89,7 @@ MyApp.User.Jido.Create.run(params, context)
 ```elixir
 jido do
   action :create
-  action :read, name: "list_users", description: "List all users"
+  action :read, name: "list_users", description: "List all users", load: [:profile]
   action :update, tags: ["user-management"]
   action :special, output_map?: false  # preserve Ash structs
 end
@@ -103,6 +103,7 @@ jido do
   all_actions except: [:destroy, :internal]
   all_actions only: [:create, :read]
   all_actions tags: ["public-api"]
+  all_actions only: [:read], read_load: [:profile]
 end
 ```
 
@@ -115,6 +116,16 @@ end
 | `description` | string | from Ash action | Action description |
 | `tags` | list(string) | `[]` | Tags for categorization |
 | `output_map?` | boolean | `true` | Convert structs to maps |
+| `load` | term | `nil` | Static `Ash.Query.load/2` for read actions |
+
+### all_actions Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `only` | list(atom) | all actions | Limit generated actions |
+| `except` | list(atom) | `[]` | Exclude actions |
+| `tags` | list(string) | `[]` | Tags added to all generated actions |
+| `read_load` | term | `nil` | Static `Ash.Query.load/2` for generated read actions |
 
 ### Default Naming
 

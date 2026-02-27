@@ -77,6 +77,7 @@ defmodule AshJido.Resource.Transformers.GenerateJidoActions do
         description: nil,
         # Additional tags from all_actions
         tags: all_actions.tags || [],
+        load: if(ash_action.type == :read, do: all_actions.read_load),
         output_map?: true
       }
     end)

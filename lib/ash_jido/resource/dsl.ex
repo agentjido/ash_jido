@@ -78,6 +78,10 @@ defmodule AshJido.Resource.Dsl do
               type: :boolean,
               default: true,
               doc: "Convert output structs to maps (recommended for AI tools)"
+            ],
+            load: [
+              type: :any,
+              doc: "Static Ash.Query.load statement to apply to generated read actions"
             ]
           ]
         },
@@ -115,6 +119,10 @@ defmodule AshJido.Resource.Dsl do
               type: {:list, :string},
               default: [],
               doc: "Additional tags to add to all generated actions"
+            ],
+            read_load: [
+              type: :any,
+              doc: "Static Ash.Query.load statement applied to all auto-generated read actions"
             ]
           ]
         }

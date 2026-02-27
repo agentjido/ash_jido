@@ -49,7 +49,7 @@ defmodule AshJido do
 
       jido do
         action :create
-        action :read, name: "list_users", description: "List all users"
+        action :read, name: "list_users", description: "List all users", load: [:profile]
         action :update, tags: ["user-management"]
         action :special, output_map?: false
       end
@@ -61,6 +61,7 @@ defmodule AshJido do
         all_actions except: [:destroy]
         all_actions only: [:create, :read]
         all_actions tags: ["public-api"]
+        all_actions only: [:read], read_load: [:profile]
       end
 
   ## Action Options
@@ -70,6 +71,7 @@ defmodule AshJido do
   - `description` - Action description (default: from Ash action)
   - `tags` - List of tags for categorization (default: `[]`)
   - `output_map?` - Convert output structs to maps (default: `true`)
+  - `load` - Static `Ash.Query.load/2` statement for read actions (default: `nil`)
 
   ## Default Naming
 

@@ -7,12 +7,14 @@ defmodule AshJido.Resource.AllActions do
     :except,
     :only,
     :tags,
+    :read_load,
     :__spark_metadata__
   ]
 
   @type t :: %__MODULE__{
           except: [atom()] | nil,
           only: [atom()] | nil,
-          tags: [String.t()] | nil
+          tags: [String.t()] | nil,
+          read_load: term() | nil
         }
 end

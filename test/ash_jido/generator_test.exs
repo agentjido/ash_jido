@@ -290,6 +290,23 @@ defmodule AshJido.GeneratorTest do
   end
 
   describe "error handling" do
+    test "raises when load is configured on a non-read action" do
+      dsl_state = TestResource.spark_dsl_config()
+
+      jido_action = %AshJido.Resource.JidoAction{
+        action: :register,
+        name: "register_with_invalid_load",
+        module_name: nil,
+        description: "Invalid load config",
+        load: [:author],
+        output_map?: true
+      }
+
+      assert_raise ArgumentError, ~r/:load option is only supported for read actions/, fn ->
+        AshJido.Generator.generate_jido_action_module(TestResource, jido_action, dsl_state)
+      end
+    end
+
     test "raises helpful error when no domain in context" do
       dsl_state = TestResource.spark_dsl_config()
 

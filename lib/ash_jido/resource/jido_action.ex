@@ -9,6 +9,7 @@ defmodule AshJido.Resource.JidoAction do
     :module_name,
     :description,
     :tags,
+    :load,
     :__spark_metadata__,
     output_map?: true
   ]
@@ -19,6 +20,7 @@ defmodule AshJido.Resource.JidoAction do
           module_name: atom() | nil,
           description: String.t() | nil,
           tags: [String.t()] | nil,
+          load: term() | nil,
           output_map?: boolean()
         }
 end

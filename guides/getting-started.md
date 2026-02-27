@@ -104,6 +104,14 @@ jido do
 end
 ```
 
+And apply static relationship loads to all generated read actions:
+
+```elixir
+jido do
+  all_actions only: [:read], read_load: [:profile, :roles]
+end
+```
+
 ## Using Generated Actions
 
 Call the generated modules using `run/2` with params and a context map. The context must include at minimum a `:domain`:
@@ -164,6 +172,9 @@ Each action in the `jido` section supports these options:
 | `description` | `string` | Ash action description | Description for AI discovery and documentation |
 | `tags` | `list(string)` | `[]` | Tags for categorization and AI discovery |
 | `output_map?` | `boolean` | `true` | Convert output structs to maps |
+| `load` | `term` | `nil` | Static `Ash.Query.load/2` statement for read actions |
+
+`all_actions` additionally supports `read_load` to apply a static load statement to generated read actions.
 
 ### Examples
 
@@ -173,7 +184,10 @@ jido do
   action :create
 
   # Custom name for better AI discoverability
-  action :read, name: "search_users", description: "Search for users by criteria"
+  action :read,
+    name: "search_users",
+    description: "Search for users by criteria",
+    load: [:profile]
 
   # Add tags for categorization
   action :update, tags: ["user-management", "data-modification"]

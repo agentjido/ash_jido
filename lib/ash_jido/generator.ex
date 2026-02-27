@@ -11,6 +11,7 @@ defmodule AshJido.Generator do
   """
   def generate_jido_action_module(resource, jido_action, dsl_state) do
     ash_action = get_ash_action(resource, jido_action.action, dsl_state)
+    validate_jido_action_options!(resource, ash_action, jido_action)
     module_name = build_module_name(resource, jido_action, ash_action)
     module_ast = build_module_ast(resource, ash_action, jido_action, module_name, dsl_state)
 
@@ -97,6 +98,7 @@ defmodule AshJido.Generator do
                 result =
                   @resource
                   |> Ash.Query.for_read(@ash_action, params, ash_opts)
+                  |> maybe_load(@jido_config)
                   |> Ash.read!(ash_opts)
 
                 # Ash.read! returns a raw list, not {:ok, result}
@@ -164,7 +166,21 @@ defmodule AshJido.Generator do
               {:error, jido_error}
           end
         end
+
+        defp maybe_load(query, config) do
+          case config.load do
+            nil -> query
+            load -> Ash.Query.load(query, load)
+          end
+        end
       end
+    end
+  end
+
+  defp validate_jido_action_options!(resource, ash_action, jido_action) do
+    if not is_nil(jido_action.load) and ash_action.type != :read do
+      raise ArgumentError,
+            "AshJido: :load option is only supported for read actions. #{inspect(resource)}.#{ash_action.name} is a #{ash_action.type} action."
     end
   end
 
