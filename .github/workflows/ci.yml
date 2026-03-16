@@ -14,13 +14,16 @@ jobs:
   lint:
     name: Lint
     uses: agentjido/github-actions/.github/workflows/elixir-lint.yml@main
+    with:
+      otp_version: "28"
+      elixir_version: "1.19"
 
   test:
     name: Test
     uses: agentjido/github-actions/.github/workflows/elixir-test.yml@main
     with:
-      otp_versions: '["26", "27"]'
-      elixir_versions: '["1.17", "1.18"]'
+      otp_versions: '["27", "28"]'
+      elixir_versions: '["1.18", "1.19"]'
       test_command: mix test
 
   docs:
@@ -34,8 +37,8 @@ jobs:
       - name: Setup Elixir
         uses: erlef/setup-beam@v1
         with:
-          otp-version: "27"
-          elixir-version: "1.18.4"
+          otp-version: "28"
+          elixir-version: "1.19"
 
       - name: Install dependencies
         run: mix deps.get
@@ -77,8 +80,8 @@ jobs:
       - name: Setup Elixir
         uses: erlef/setup-beam@v1
         with:
-          otp-version: "27"
-          elixir-version: "1.18.4"
+          otp-version: "28"
+          elixir-version: "1.19"
 
       - name: Install dependencies
         working-directory: ash_jido_consumer

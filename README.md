@@ -247,7 +247,7 @@ For a full error contract and telemetry interpretation, see [Walkthrough: Failur
 ## Compatibility
 
 - Elixir: ~> 1.18
-- Elixir: ~> 1.17
+- OTP: 27 or 28
 - Ash: ~> 3.12
 - Jido: ~> 2.0
 
