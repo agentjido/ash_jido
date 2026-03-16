@@ -67,7 +67,73 @@ defmodule AshJido.Resource.Transformers.GenerateJidoActionsTest do
     end
   end
 
+  defmodule ResourceWithAllActionsMetadata do
+    use Ash.Resource,
+      domain: nil,
+      extensions: [AshJido],
+      data_layer: Ash.DataLayer.Ets
+
+    ets do
+      private?(true)
+    end
+
+    attributes do
+      uuid_primary_key(:id)
+      attribute(:name, :string, allow_nil?: false)
+    end
+
+    actions do
+      defaults([:read])
+
+      create :register do
+        accept([:name])
+      end
+    end
+
+    jido do
+      all_actions(tags: ["metadata"], vsn: "3.0.0")
+    end
+  end
+
   describe "transform/1" do
+    test "returns an error when load is configured on a non-read action" do
+      unique_suffix = System.unique_integer([:positive])
+      module_name = Module.concat(__MODULE__, :"InvalidLoadResource#{unique_suffix}")
+
+      resource_ast =
+        quote do
+          defmodule unquote(module_name) do
+            use Ash.Resource,
+              domain: nil,
+              extensions: [AshJido],
+              data_layer: Ash.DataLayer.Ets
+
+            ets do
+              private?(true)
+            end
+
+            attributes do
+              uuid_primary_key(:id)
+              attribute(:name, :string)
+            end
+
+            actions do
+              create :create do
+                accept([:name])
+              end
+            end
+
+            jido do
+              action(:create, load: [:author])
+            end
+          end
+        end
+
+      assert_raise ArgumentError, ~r/:load option is only supported for read actions/, fn ->
+        Code.compile_quoted(resource_ast)
+      end
+    end
+
     test "returns original DSL state unchanged when no jido section" do
       dsl_state = ResourceWithoutJido.spark_dsl_config()
 
@@ -188,6 +254,31 @@ defmodule AshJido.Resource.Transformers.GenerateJidoActionsTest do
         schema = module.schema()
         assert is_list(schema)
       end
+    end
+
+    test "all_actions applies metadata defaults and passes tags/vsn to generated modules" do
+      dsl_state = ResourceWithAllActionsMetadata.spark_dsl_config()
+      {:ok, transformed_state} = GenerateJidoActions.transform(dsl_state)
+
+      generated_modules =
+        Spark.Dsl.Extension.get_persisted(transformed_state, :generated_jido_modules)
+
+      register_module =
+        Enum.find(generated_modules, fn module ->
+          module.name() == "create_resource_with_all_actions_metadata"
+        end)
+
+      read_module =
+        Enum.find(generated_modules, fn module ->
+          module.name() == "list_resource_with_all_actions_metadatas"
+        end)
+
+      assert register_module.category() == "ash.create"
+      assert read_module.category() == "ash.read"
+      assert register_module.tags() == ["metadata"]
+      assert read_module.tags() == ["metadata"]
+      assert register_module.vsn() == "3.0.0"
+      assert read_module.vsn() == "3.0.0"
     end
   end
 

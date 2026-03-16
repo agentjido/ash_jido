@@ -91,17 +91,23 @@ defmodule AshJido.SignalFactory do
     |> Ash.Resource.Info.attributes()
     |> Enum.reduce(%{}, fn attribute, acc ->
       case fetch_value(data, attribute.name) do
-        nil -> acc
-        value -> Map.put(acc, attribute.name, normalize_value(value))
+        {:ok, value} -> Map.put(acc, attribute.name, normalize_value(value))
+        :error -> acc
       end
     end)
   end
 
-  defp extract_changes(%Notification{changeset: %Ash.Changeset{} = changeset}) do
+  defp extract_changes(%Notification{changeset: %Ash.Changeset{} = changeset} = notification) do
     changeset
     |> Map.get(:attributes, %{})
     |> Enum.reduce(%{}, fn {key, value}, acc ->
-      Map.put(acc, key, normalize_value(value))
+      resolved_value =
+        case fetch_value(notification.data, key) do
+          {:ok, data_value} -> data_value
+          :error -> value
+        end
+
+      Map.put(acc, key, normalize_value(resolved_value))
     end)
   end
 
@@ -112,8 +118,8 @@ defmodule AshJido.SignalFactory do
   defp extract_selected_attributes(%Notification{data: data}, fields) do
     Enum.reduce(fields, %{}, fn field, acc ->
       case fetch_value(data, field) do
-        nil -> acc
-        value -> Map.put(acc, field, normalize_value(value))
+        {:ok, value} -> Map.put(acc, field, normalize_value(value))
+        :error -> acc
       end
     end)
   end
@@ -124,7 +130,10 @@ defmodule AshJido.SignalFactory do
     resource
     |> Ash.Resource.Info.primary_key()
     |> Enum.reduce(%{}, fn key, acc ->
-      Map.put(acc, key, normalize_value(fetch_value(data, key)))
+      case fetch_value(data, key) do
+        {:ok, value} -> Map.put(acc, key, normalize_value(value))
+        :error -> acc
+      end
     end)
   end
 
@@ -142,9 +151,14 @@ defmodule AshJido.SignalFactory do
     pkey_values =
       resource
       |> Ash.Resource.Info.primary_key()
-      |> Enum.map(&fetch_value(data, &1))
-      |> Enum.reject(&is_nil/1)
-      |> Enum.map(&to_string/1)
+      |> Enum.reduce([], fn key, acc ->
+        case fetch_value(data, key) do
+          {:ok, nil} -> acc
+          {:ok, value} -> [to_string(value) | acc]
+          :error -> acc
+        end
+      end)
+      |> Enum.reverse()
 
     if pkey_values == [] do
       nil
@@ -226,16 +240,16 @@ defmodule AshJido.SignalFactory do
   defp metadata_fields(_), do: []
 
   defp fetch_value(data, key) when is_map(data) do
-    case data do
-      %{^key => value} ->
-        value
+    case Map.fetch(data, key) do
+      {:ok, value} ->
+        {:ok, value}
 
-      _ ->
-        Map.get(data, to_string(key))
+      :error ->
+        Map.fetch(data, to_string(key))
     end
   end
 
-  defp fetch_value(_, _), do: nil
+  defp fetch_value(_, _), do: :error
 
   defp normalize_value(%Date{} = value), do: value
   defp normalize_value(%Time{} = value), do: value

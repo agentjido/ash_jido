@@ -1,5 +1,5 @@
 defmodule AshJido.SignalFactoryTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
   alias Ash.Notifier.Notification
   alias AshJido.Publication
@@ -45,6 +45,20 @@ defmodule AshJido.SignalFactoryTest do
       refute Map.has_key?(signal.data, :secret)
     end
 
+    test "all includes attributes explicitly set to nil" do
+      notification =
+        build_notification(
+          :create,
+          base_record(%{id: "123", name: "Test", secret: nil})
+        )
+
+      publication = %Publication{actions: [:create], include: :all, metadata: []}
+
+      assert {:ok, signal} = SignalFactory.from_notification(notification, publication)
+      assert Map.has_key?(signal.data, :secret)
+      assert signal.data.secret == nil
+    end
+
     test "changes_only includes only changed attributes" do
       previous = base_record(%{id: "123", status: :draft, name: "Old"})
       changeset = Ash.Changeset.for_update(previous, :update, %{status: :published})
@@ -54,6 +68,28 @@ defmodule AshJido.SignalFactoryTest do
 
       assert {:ok, signal} = SignalFactory.from_notification(notification, publication)
       assert signal.data == %{status: :published}
+    end
+
+    test "changes_only resolves atomic attribute values from notification data" do
+      start_supervised!({Jido.Signal.Bus, name: :ash_jido_test_bus})
+
+      record =
+        AshJido.Test.ReactiveResource
+        |> Ash.Changeset.for_create(:create, %{name: "Old"})
+        |> Ash.create!()
+
+      {updated, notifications} =
+        record
+        |> Ash.Changeset.for_update(:update, %{status: :published})
+        |> Ash.update!(return_notifications?: true)
+
+      notification = Enum.find(notifications, &(&1.action.name == :update))
+      publication = %Publication{actions: [:update], include: :changes_only, metadata: []}
+
+      assert %Notification{} = notification
+      assert {:ok, signal} = SignalFactory.from_notification(notification, publication)
+      assert signal.data.status == :published
+      assert signal.data.updated_at == updated.updated_at
     end
 
     test "explicit field list filters attributes" do
@@ -68,6 +104,19 @@ defmodule AshJido.SignalFactoryTest do
       assert {:ok, signal} = SignalFactory.from_notification(notification, publication)
       assert signal.data == %{id: "123", name: "Test"}
       refute Map.has_key?(signal.data, :secret)
+    end
+
+    test "explicit field list includes attributes explicitly set to nil" do
+      notification =
+        build_notification(
+          :create,
+          base_record(%{id: "123", name: "Test", secret: nil})
+        )
+
+      publication = %Publication{actions: [:create], include: [:id, :secret], metadata: []}
+
+      assert {:ok, signal} = SignalFactory.from_notification(notification, publication)
+      assert signal.data == %{id: "123", secret: nil}
     end
 
     test "includes actor_id when :actor in metadata" do

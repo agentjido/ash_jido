@@ -70,13 +70,6 @@ defmodule AshJido.Resource.Dsl do
         action :read, tags: ["search", "user-management", "public"]
       end
       ```
-
-      Expose all actions with defaults:
-      ```elixir
-      jido do
-        all_actions
-      end
-      ```
       """,
       target: AshJido.Resource.JidoAction,
       args: [:action],
@@ -99,15 +92,50 @@ defmodule AshJido.Resource.Dsl do
           doc:
             "Description for the Jido action. Inherits from Ash action description if available"
         ],
+        category: [
+          type: :string,
+          doc: "Category for Jido discovery and tool organization"
+        ],
         tags: [
           type: {:list, :string},
           default: [],
           doc: "Tags for better categorization and AI discovery. Auto-generates smart defaults"
         ],
+        vsn: [
+          type: :string,
+          doc: "Optional semantic version identifier for generated action metadata"
+        ],
         output_map?: [
           type: :boolean,
           default: true,
           doc: "Convert output structs to maps (recommended for AI tools)"
+        ],
+        load: [
+          type: :any,
+          doc: "Static Ash.Query.load statement to apply to generated read actions"
+        ],
+        emit_signals?: [
+          type: :boolean,
+          default: false,
+          doc: "Emit Jido signals from Ash notifications for create/update/destroy actions"
+        ],
+        signal_dispatch: [
+          type: :any,
+          doc:
+            "Default dispatch configuration for emitted signals (override with context[:signal_dispatch])"
+        ],
+        signal_type: [
+          type: :string,
+          doc: "Override the emitted signal type"
+        ],
+        signal_source: [
+          type: :string,
+          doc: "Override the emitted signal source"
+        ],
+        telemetry?: [
+          type: :boolean,
+          default: false,
+          doc: "Emit telemetry spans for generated action execution"
         ]
       ]
     }
@@ -144,10 +172,47 @@ defmodule AshJido.Resource.Dsl do
           type: {:list, :atom},
           doc: "If specified, only generate actions for these action names"
         ],
+        category: [
+          type: :string,
+          doc:
+            "Category override applied to generated actions. Defaults to ash.<action_type> when omitted"
+        ],
         tags: [
           type: {:list, :string},
           default: [],
           doc: "Additional tags to add to all generated actions"
+        ],
+        vsn: [
+          type: :string,
+          doc: "Optional semantic version identifier applied to generated action metadata"
+        ],
+        read_load: [
+          type: :any,
+          doc: "Static Ash.Query.load statement applied to all auto-generated read actions"
+        ],
+        emit_signals?: [
+          type: :boolean,
+          default: false,
+          doc:
+            "Emit Jido signals from Ash notifications for generated create/update/destroy actions"
+        ],
+        signal_dispatch: [
+          type: :any,
+          doc:
+            "Default dispatch configuration for emitted signals (override with context[:signal_dispatch])"
+        ],
+        signal_type: [
+          type: :string,
+          doc: "Override emitted signal type for generated actions"
+        ],
+        signal_source: [
+          type: :string,
+          doc: "Override emitted signal source for generated actions"
+        ],
+        telemetry?: [
+          type: :boolean,
+          default: false,
+          doc: "Emit telemetry spans for generated action execution"
         ]
       ]
     }

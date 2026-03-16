@@ -78,8 +78,16 @@ defmodule AshJido.Resource.Transformers.GenerateJidoActions do
         module_name: nil,
         # Will inherit from ash action
         description: nil,
+        category: all_actions.category || "ash.#{ash_action.type}",
         # Additional tags from all_actions
         tags: all_actions.tags || [],
+        vsn: all_actions.vsn,
+        load: if(ash_action.type == :read, do: all_actions.read_load),
+        emit_signals?: all_actions.emit_signals? || false,
+        signal_dispatch: all_actions.signal_dispatch,
+        signal_type: all_actions.signal_type,
+        signal_source: all_actions.signal_source,
+        telemetry?: all_actions.telemetry? || false,
         output_map?: true
       }
     end)

@@ -11,6 +11,7 @@ defmodule AshJido.Generator do
   """
   def generate_jido_action_module(resource, jido_action, dsl_state) do
     ash_action = get_ash_action(resource, jido_action.action, dsl_state)
+    validate_jido_action_options!(resource, ash_action, jido_action)
     module_name = build_module_name(resource, jido_action, ash_action)
     module_ast = build_module_ast(resource, ash_action, jido_action, module_name, dsl_state)
 
@@ -57,8 +58,22 @@ defmodule AshJido.Generator do
     description =
       jido_action.description || ash_action.description || "Ash action: #{ash_action.name}"
 
+    tags = jido_action.tags || []
+    category = jido_action.category
+    vsn = jido_action.vsn
+
     # Build input schema including accepted attributes
     schema = build_parameter_schema(resource, ash_action, dsl_state)
+
+    action_use_opts =
+      [
+        name: action_name,
+        description: description,
+        tags: tags,
+        schema: schema
+      ]
+      |> maybe_put_option(:category, category)
+      |> maybe_put_option(:vsn, vsn)
 
     quote do
       defmodule unquote(module_name) do
@@ -68,10 +83,7 @@ defmodule AshJido.Generator do
         Wraps the Ash action; see the resource docs for semantics.
         """
 
-        use Jido.Action,
-          name: unquote(action_name),
-          description: unquote(description),
-          schema: unquote(Macro.escape(schema))
+        use Jido.Action, unquote(Macro.escape(action_use_opts))
 
         @resource unquote(resource)
         @ash_action unquote(ash_action.name)
@@ -79,44 +91,70 @@ defmodule AshJido.Generator do
         @jido_config unquote(Macro.escape(jido_action))
 
         def run(params, context) do
-          domain = context[:domain]
+          ash_opts = AshJido.Context.extract_ash_opts!(context, @resource, @ash_action)
+          telemetry_meta = telemetry_metadata(ash_opts, @jido_config)
+          telemetry_span = AshJido.Telemetry.start(@jido_config, telemetry_meta)
 
-          unless domain do
-            raise ArgumentError,
-                  "AshJido: :domain must be provided in context for #{inspect(@resource)}.#{@ash_action}"
+          {result, signal_meta, exception?} =
+            case AshJido.SignalEmitter.validate_dispatch_config(
+                   context,
+                   @jido_config,
+                   @resource,
+                   @ash_action,
+                   @ash_action_type
+                 ) do
+              :ok ->
+                execute_action(params, context, ash_opts, telemetry_span)
+
+              {:error, error} ->
+                {{:error, error}, empty_signal_meta(), false}
+            end
+
+          if exception? do
+            result
+          else
+            AshJido.Telemetry.stop(telemetry_span, result, signal_meta)
+            result
           end
+        end
 
-          actor = context[:actor]
-          tenant = context[:tenant]
-
-          # Execute the Ash action
+        defp execute_action(params, context, ash_opts, telemetry_span) do
           try do
-            case unquote(ash_action.type) do
+            case @ash_action_type do
               :create ->
-                result =
+                create_result =
                   @resource
-                  |> Ash.Changeset.for_create(@ash_action, params,
-                    actor: actor,
-                    tenant: tenant,
-                    domain: domain
+                  |> Ash.Changeset.for_create(@ash_action, params, ash_opts)
+                  |> Ash.create!(
+                    maybe_add_notification_collection(ash_opts, @jido_config, :create)
                   )
-                  |> Ash.create!(actor: actor, tenant: tenant, domain: domain)
 
-                {:ok, result} |> AshJido.Mapper.wrap_result(@jido_config)
+                {result, notifications} = maybe_extract_result_and_notifications(create_result)
+
+                signal_emission =
+                  maybe_emit_notifications(
+                    notifications,
+                    context,
+                    @jido_config,
+                    @resource,
+                    @ash_action,
+                    :create
+                  )
+
+                action_result = {:ok, result} |> AshJido.Mapper.wrap_result(@jido_config)
+                {action_result, signal_emission, false}
 
               :read ->
                 result =
                   @resource
-                  |> Ash.Query.for_read(@ash_action, params,
-                    actor: actor,
-                    tenant: tenant,
-                    domain: domain
-                  )
-                  |> Ash.read!(actor: actor, tenant: tenant, domain: domain)
+                  |> Ash.Query.for_read(@ash_action, params, ash_opts)
+                  |> maybe_load(@jido_config)
+                  |> Ash.read!(ash_opts)
 
                 # Ash.read! returns a raw list, not {:ok, result}
                 # Pass it directly to Mapper.wrap_result which will wrap it
-                AshJido.Mapper.wrap_result(result, @jido_config)
+                action_result = AshJido.Mapper.wrap_result(result, @jido_config)
+                {action_result, empty_signal_meta(), false}
 
               :update ->
                 # Load the record to update using its primary key
@@ -132,19 +170,29 @@ defmodule AshJido.Generator do
                 # Load the record first
                 record =
                   @resource
-                  |> Ash.get!(record_id, domain: domain, actor: actor, tenant: tenant)
+                  |> Ash.get!(record_id, ash_opts)
 
-                # Update the record
-                result =
+                update_result =
                   record
-                  |> Ash.Changeset.for_update(@ash_action, update_params,
-                    actor: actor,
-                    tenant: tenant,
-                    domain: domain
+                  |> Ash.Changeset.for_update(@ash_action, update_params, ash_opts)
+                  |> Ash.update!(
+                    maybe_add_notification_collection(ash_opts, @jido_config, :update)
                   )
-                  |> Ash.update!(actor: actor, tenant: tenant, domain: domain)
 
-                {:ok, result} |> AshJido.Mapper.wrap_result(@jido_config)
+                {result, notifications} = maybe_extract_result_and_notifications(update_result)
+
+                signal_emission =
+                  maybe_emit_notifications(
+                    notifications,
+                    context,
+                    @jido_config,
+                    @resource,
+                    @ash_action,
+                    :update
+                  )
+
+                action_result = {:ok, result} |> AshJido.Mapper.wrap_result(@jido_config)
+                {action_result, signal_emission, false}
 
               :destroy ->
                 # Load the record to destroy using its primary key
@@ -157,41 +205,127 @@ defmodule AshJido.Generator do
                 # Load the record first
                 record =
                   @resource
-                  |> Ash.get!(record_id, domain: domain, actor: actor, tenant: tenant)
+                  |> Ash.get!(record_id, ash_opts)
 
-                # Destroy the record
-                # Ash.destroy! returns :ok atom, pass it directly to Mapper
-                :ok =
+                destroy_result =
                   record
-                  |> Ash.Changeset.for_destroy(@ash_action, %{},
-                    actor: actor,
-                    tenant: tenant,
-                    domain: domain
+                  |> Ash.Changeset.for_destroy(@ash_action, %{}, ash_opts)
+                  |> Ash.destroy!(
+                    maybe_add_notification_collection(ash_opts, @jido_config, :destroy)
                   )
-                  |> Ash.destroy!(actor: actor, tenant: tenant, domain: domain)
+
+                notifications = maybe_extract_destroy_notifications(destroy_result)
+
+                signal_emission =
+                  maybe_emit_notifications(
+                    notifications,
+                    context,
+                    @jido_config,
+                    @resource,
+                    @ash_action,
+                    :destroy
+                  )
 
                 # Pass :ok directly to Mapper which will convert to {:ok, nil}
-                AshJido.Mapper.wrap_result(:ok, @jido_config)
+                action_result = AshJido.Mapper.wrap_result(:ok, @jido_config)
+                {action_result, signal_emission, false}
 
               :action ->
                 result =
                   @resource
-                  |> Ash.ActionInput.for_action(@ash_action, params,
-                    actor: actor,
-                    tenant: tenant,
-                    domain: domain
-                  )
-                  |> Ash.run_action!()
+                  |> Ash.ActionInput.for_action(@ash_action, params, ash_opts)
+                  |> Ash.run_action!(ash_opts)
 
-                {:ok, result} |> AshJido.Mapper.wrap_result(@jido_config)
+                action_result = {:ok, result} |> AshJido.Mapper.wrap_result(@jido_config)
+                {action_result, empty_signal_meta(), false}
             end
           rescue
             error ->
+              stacktrace = __STACKTRACE__
+              signal_meta = empty_signal_meta()
+
+              AshJido.Telemetry.exception(telemetry_span, :error, error, stacktrace, signal_meta)
+
               jido_error = AshJido.Error.from_ash(error)
-              {:error, jido_error}
+              {{:error, jido_error}, signal_meta, true}
+          end
+        end
+
+        defp telemetry_metadata(ash_opts, config) do
+          %{
+            resource: @resource,
+            ash_action_name: @ash_action,
+            ash_action_type: @ash_action_type,
+            generated_module: __MODULE__,
+            domain: Keyword.get(ash_opts, :domain),
+            tenant: Keyword.get(ash_opts, :tenant),
+            actor_present?: not is_nil(Keyword.get(ash_opts, :actor)),
+            signaling_enabled?: config.emit_signals?,
+            read_load_configured?: not is_nil(config.load)
+          }
+        end
+
+        defp empty_signal_meta, do: %{failed: [], sent: 0}
+
+        defp maybe_load(query, config) do
+          case config.load do
+            nil -> query
+            load -> Ash.Query.load(query, load)
+          end
+        end
+
+        defp maybe_add_notification_collection(ash_opts, config, action_type) do
+          if action_type in [:create, :update, :destroy] and config.emit_signals? do
+            Keyword.put(ash_opts, :return_notifications?, true)
+          else
+            ash_opts
+          end
+        end
+
+        defp maybe_extract_result_and_notifications({result, notifications})
+             when is_list(notifications) do
+          {result, notifications}
+        end
+
+        defp maybe_extract_result_and_notifications(result), do: {result, []}
+
+        defp maybe_extract_destroy_notifications(notifications) when is_list(notifications),
+          do: notifications
+
+        defp maybe_extract_destroy_notifications({_result, notifications})
+             when is_list(notifications),
+             do: notifications
+
+        defp maybe_extract_destroy_notifications(_), do: []
+
+        defp maybe_emit_notifications(
+               notifications,
+               context,
+               config,
+               resource,
+               action_name,
+               action_type
+             ) do
+          if action_type in [:create, :update, :destroy] and config.emit_signals? do
+            AshJido.SignalEmitter.emit_notifications(
+              notifications,
+              context,
+              resource,
+              action_name,
+              config
+            )
+          else
+            empty_signal_meta()
           end
         end
       end
+    end
+  end
+
+  defp validate_jido_action_options!(resource, ash_action, jido_action) do
+    if not is_nil(jido_action.load) and ash_action.type != :read do
+      raise ArgumentError,
+            "AshJido: :load option is only supported for read actions. #{inspect(resource)}.#{ash_action.name} is a #{ash_action.type} action."
     end
   end
 
@@ -313,7 +447,7 @@ defmodule AshJido.Generator do
   defp pluralize(word) do
     cond do
       String.ends_with?(word, "y") ->
-        String.slice(word, 0..-2//-1) <> "ies"
+        String.slice(word, 0..-2//1) <> "ies"
 
       String.ends_with?(word, ["s", "sh", "ch", "x", "z"]) ->
         word <> "es"
@@ -322,4 +456,7 @@ defmodule AshJido.Generator do
         word <> "s"
     end
   end
+
+  defp maybe_put_option(opts, _key, nil), do: opts
+  defp maybe_put_option(opts, key, value), do: Keyword.put(opts, key, value)
 end

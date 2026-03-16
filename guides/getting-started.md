@@ -20,6 +20,23 @@ Then fetch dependencies:
 mix deps.get
 ```
 
+## Walkthrough Guides
+
+For focused end-to-end examples, use these guides alongside this reference:
+
+**Core**
+- [Resource to Action](walkthrough-resource-to-action.md)
+- [Policy, Scope, and Authorization](walkthrough-policy-scope-auth.md)
+- [AshPostgres Consumer Harness](walkthrough-ash-postgres-consumer.md)
+
+**Operations**
+- [Signals, Telemetry, and Sensors](walkthrough-signals-telemetry-sensors.md)
+- [Failure Semantics](walkthrough-failure-semantics.md)
+
+**Agent Integration**
+- [Tools and AI Integration](walkthrough-tools-and-ai.md)
+- [Agent Tool Wiring](walkthrough-agent-tool-wiring.md)
+
 ## Basic Usage
 
 Add the `AshJido` extension to your Ash resource and define which actions to expose in the `jido` section:
@@ -104,6 +121,14 @@ jido do
 end
 ```
 
+And apply static relationship loads to all generated read actions:
+
+```elixir
+jido do
+  all_actions only: [:read], read_load: [:profile, :roles]
+end
+```
+
 ## Using Generated Actions
 
 Call the generated modules using `run/2` with params and a context map. The context must include at minimum a `:domain`:
@@ -140,9 +165,15 @@ The context map supports additional options for authorization and multi-tenancy:
 
 ```elixir
 context = %{
-  domain: MyApp.Accounts,    # Required: the Ash domain
-  actor: current_user,       # Optional: for authorization policies
-  tenant: "org_123"          # Optional: for multi-tenant apps
+  domain: MyApp.Accounts,       # Required: the Ash domain
+  actor: current_user,          # Optional: for authorization policies
+  tenant: "org_123",            # Optional: for multi-tenant apps
+  authorize?: true,             # Optional: explicit authorization mode
+  tracer: [MyApp.Tracer],       # Optional: Ash tracer modules
+  scope: MyApp.Scope.for(user), # Optional: Ash scope
+  context: %{request_id: "1"},  # Optional: Ash action context
+  timeout: 15_000,              # Optional: Ash operation timeout
+  signal_dispatch: {:pid, target: self()} # Optional: override signal dispatch
 }
 
 MyApp.Accounts.User.Jido.Register.run(params, context)
@@ -157,8 +188,40 @@ Each action in the `jido` section supports these options:
 | `name` | `string` | `"resource_action"` | Custom name for the Jido action |
 | `module_name` | `atom` | `Resource.Jido.ActionName` | Custom module name for the generated action |
 | `description` | `string` | Ash action description | Description for AI discovery and documentation |
+| `category` | `string` | `nil` | Category for discovery/tool organization |
 | `tags` | `list(string)` | `[]` | Tags for categorization and AI discovery |
+| `vsn` | `string` | `nil` | Optional semantic version metadata |
 | `output_map?` | `boolean` | `true` | Convert output structs to maps |
+| `load` | `term` | `nil` | Static `Ash.Query.load/2` statement for read actions |
+| `emit_signals?` | `boolean` | `false` | Emit Jido signals from Ash notifications (create/update/destroy) |
+| `signal_dispatch` | `term` | `nil` | Default signal dispatch config (overridable via context) |
+| `signal_type` | `string` | derived | Override emitted signal type |
+| `signal_source` | `string` | derived | Override emitted signal source |
+| `telemetry?` | `boolean` | `false` | Emit Jido-namespaced telemetry for generated action execution |
+
+`all_actions` additionally supports:
+
+- `read_load` for static read relationship loading
+- `category` (default `ash.<action_type>`)
+- `tags`
+- `vsn`
+- `emit_signals?`, `signal_dispatch`, `signal_type`, `signal_source`, and `telemetry?`
+
+### Telemetry
+
+Telemetry is opt-in:
+
+```elixir
+jido do
+  action :create, telemetry?: true
+end
+```
+
+When enabled, generated actions emit:
+
+- `[:jido, :action, :ash_jido, :start]`
+- `[:jido, :action, :ash_jido, :stop]`
+- `[:jido, :action, :ash_jido, :exception]`
 
 ### Examples
 
@@ -168,10 +231,16 @@ jido do
   action :create
 
   # Custom name for better AI discoverability
-  action :read, name: "search_users", description: "Search for users by criteria"
+  action :read,
+    name: "search_users",
+    description: "Search for users by criteria",
+    load: [:profile]
 
   # Add tags for categorization
-  action :update, tags: ["user-management", "data-modification"]
+  action :update,
+    category: "ash.update",
+    tags: ["user-management", "data-modification"],
+    vsn: "1.0.0"
 
   # Custom module name
   action :promote, module_name: MyApp.Actions.PromoteUser
@@ -179,6 +248,26 @@ jido do
   # Disable output map conversion (keep Ash structs)
   action :special, output_map?: false
 end
+```
+
+## Tool Export Helpers
+
+Use `AshJido.Tools` when integrating generated actions with tool-oriented agent systems:
+
+```elixir
+AshJido.Tools.actions(MyApp.Accounts.User)
+AshJido.Tools.actions(MyApp.Accounts)
+AshJido.Tools.tools(MyApp.Accounts.User)
+```
+
+## Sensor Bridge Helpers
+
+If you use signal dispatch targets that should also feed sensor runtimes, use `AshJido.SensorDispatchBridge`:
+
+```elixir
+AshJido.SensorDispatchBridge.forward(signal_or_message, sensor_runtime)
+AshJido.SensorDispatchBridge.forward_many(messages, sensor_runtime)
+AshJido.SensorDispatchBridge.forward_or_ignore(message, sensor_runtime)
 ```
 
 ## Output Formats
@@ -383,7 +472,7 @@ alias MyApp.Blog.Post
 )
 
 # List all posts
-{:ok, %{results: posts}} = Post.Jido.Read.run(%{}, %{domain: MyApp.Blog})
+{:ok, posts} = Post.Jido.Read.run(%{}, %{domain: MyApp.Blog})
 
 # Publish the post
 {:ok, published} = Post.Jido.Publish.run(

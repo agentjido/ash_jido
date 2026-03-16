@@ -111,6 +111,28 @@ defmodule AshJido.GeneratorTest do
       assert function_exported?(TestCustomModule, :run, 2)
     end
 
+    test "passes metadata options into generated Jido.Action module" do
+      dsl_state = TestResource.spark_dsl_config()
+
+      jido_action = %AshJido.Resource.JidoAction{
+        action: :register,
+        name: "register_with_metadata",
+        module_name: TestMetadataModule,
+        description: "Register with metadata",
+        category: "ash.custom",
+        tags: ["users", "write"],
+        vsn: "2.1.0",
+        output_map?: true
+      }
+
+      module_name = Generator.generate_jido_action_module(TestResource, jido_action, dsl_state)
+
+      assert module_name == TestMetadataModule
+      assert module_name.category() == "ash.custom"
+      assert module_name.tags() == ["users", "write"]
+      assert module_name.vsn() == "2.1.0"
+    end
+
     test "handles read actions correctly" do
       dsl_state = TestResource.spark_dsl_config()
 
@@ -290,6 +312,23 @@ defmodule AshJido.GeneratorTest do
   end
 
   describe "error handling" do
+    test "raises when load is configured on a non-read action" do
+      dsl_state = TestResource.spark_dsl_config()
+
+      jido_action = %AshJido.Resource.JidoAction{
+        action: :register,
+        name: "register_with_invalid_load",
+        module_name: nil,
+        description: "Invalid load config",
+        load: [:author],
+        output_map?: true
+      }
+
+      assert_raise ArgumentError, ~r/:load option is only supported for read actions/, fn ->
+        AshJido.Generator.generate_jido_action_module(TestResource, jido_action, dsl_state)
+      end
+    end
+
     test "raises helpful error when no domain in context" do
       dsl_state = TestResource.spark_dsl_config()
 

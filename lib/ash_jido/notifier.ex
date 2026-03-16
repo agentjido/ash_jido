@@ -78,8 +78,7 @@ defmodule AshJido.Notifier do
   end
 
   defp requires_original_data_for_publication?(publication) do
-    publication.include in [:all, :pkey_only] or
-      :previous_state in List.wrap(publication.metadata)
+    :previous_state in List.wrap(publication.metadata)
   end
 
   defp matching_publications(resource, action_name) do
