@@ -9,7 +9,7 @@ defmodule AshJido.MixProject do
     [
       app: :ash_jido,
       version: @version,
-      elixir: "~> 1.17",
+      elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
       elixirc_paths: elixirc_paths(Mix.env()),
       consolidate_protocols: Mix.env() != :test,
@@ -62,6 +62,7 @@ defmodule AshJido.MixProject do
       {:ash, "~> 3.12"},
       {:jido, "~> 2.0.0-rc"},
       {:jido_action, "~> 2.0.0-rc"},
+      {:jido_signal, "~> 2.0.0-rc"},
       {:splode, "~> 0.3"},
       {:zoi, "~> 0.14"},
 
@@ -73,6 +74,7 @@ defmodule AshJido.MixProject do
       {:git_hooks, "~> 0.8", only: [:dev, :test], runtime: false},
       {:git_ops, "~> 2.9", only: :dev, runtime: false},
       {:igniter, "~> 0.7", only: [:dev, :test]},
+      {:picosat_elixir, "~> 0.2", only: [:dev, :test], runtime: false},
       {:usage_rules, "~> 0.1", only: [:dev]}
     ]
   end

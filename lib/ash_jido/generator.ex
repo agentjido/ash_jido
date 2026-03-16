@@ -447,7 +447,7 @@ defmodule AshJido.Generator do
   defp pluralize(word) do
     cond do
       String.ends_with?(word, "y") ->
-        String.slice(word, 0..-2//-1) <> "ies"
+        String.slice(word, 0..-2//1) <> "ies"
 
       String.ends_with?(word, ["s", "sh", "ch", "x", "z"]) ->
         word <> "es"

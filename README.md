@@ -9,6 +9,7 @@ Bridge Ash Framework resources with Jido agents. Generates `Jido.Action` modules
 - Maps Ash argument types to NimbleOptions schemas
 - Runs actions via Ash with provided `domain`, `actor`, and `tenant`
 - Converts Ash errors to `Jido.Action.Error` (Splode-based) errors
+- Publishes `Jido.Signal` events from Ash action notifications
 
 ## What It Does Not Do
 
@@ -109,6 +110,32 @@ jido do
   all_actions only: [:read], read_load: [:profile]
 end
 ```
+
+### Reactive Signals (Phase 1)
+
+Add `AshJido.Notifier` to the resource and configure publications in `jido`:
+
+```elixir
+defmodule MyApp.Post do
+  use Ash.Resource,
+    domain: MyApp.Blog,
+    extensions: [AshJido],
+    notifiers: [AshJido.Notifier]
+
+  jido do
+    signal_bus MyApp.SignalBus
+    signal_prefix "blog"
+
+    publish :create, "blog.post.created",
+      include: [:id, :title],
+      metadata: [:actor, :tenant]
+
+    publish_all :update, include: :changes_only
+  end
+end
+```
+
+Published signals include Ash metadata in `signal.extensions["jido_metadata"]`.
 
 ### Action Options
 
@@ -220,8 +247,9 @@ For a full error contract and telemetry interpretation, see [Walkthrough: Failur
 ## Compatibility
 
 - Elixir: ~> 1.18
+- OTP: 27 or 28
 - Ash: ~> 3.12
-- Jido: ~> 1.1
+- Jido: ~> 2.0
 
 ## Documentation
 

@@ -54,6 +54,9 @@ defmodule AshJido.Resource.Transformers.GenerateJidoActions do
 
         %AshJido.Resource.JidoAction{} = jido_action ->
           [jido_action]
+
+        _ ->
+          []
       end
     end)
   end
