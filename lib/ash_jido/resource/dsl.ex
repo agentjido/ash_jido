@@ -149,7 +149,8 @@ defmodule AshJido.Resource.Dsl do
         max_page_size: [
           type: :pos_integer,
           required: false,
-          doc: "Maximum page size (limit) for this action. Used to enforce query bounds at runtime."
+          doc:
+            "Maximum page size (limit) for this action. Used to enforce query bounds at runtime."
         ]
       ]
     }
