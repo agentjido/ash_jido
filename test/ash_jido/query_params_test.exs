@@ -98,4 +98,247 @@ defmodule AshJido.QueryParamsTest do
       refute Keyword.has_key?(schema, :load)
     end
   end
+
+  describe "runtime: filter" do
+    setup :create_test_users
+
+    test "filters by exact equality", %{users: _users} do
+      {:ok, result} =
+        AshJido.Test.User.Jido.Read.run(
+          %{filter: %{name: "Alice"}},
+          %{domain: AshJido.Test.Domain}
+        )
+
+      assert length(result) == 1
+      assert hd(result)[:name] == "Alice"
+    end
+
+    test "filters with greater_than operator", %{users: _users} do
+      {:ok, result} =
+        AshJido.Test.User.Jido.Read.run(
+          %{filter: %{age: %{greater_than: 28}}},
+          %{domain: AshJido.Test.Domain}
+        )
+
+      # Alice (30) and Charlie (35)
+      assert length(result) == 2
+      names = Enum.map(result, & &1[:name]) |> Enum.sort()
+      assert names == ["Alice", "Charlie"]
+    end
+
+    test "filters with in operator", %{users: _users} do
+      {:ok, result} =
+        AshJido.Test.User.Jido.Read.run(
+          %{filter: %{name: %{in: ["Alice", "Bob"]}}},
+          %{domain: AshJido.Test.Domain}
+        )
+
+      assert length(result) == 2
+    end
+
+    test "filters with multiple conditions (AND)", %{users: _users} do
+      {:ok, result} =
+        AshJido.Test.User.Jido.Read.run(
+          %{filter: %{active: true, age: %{greater_than: 28}}},
+          %{domain: AshJido.Test.Domain}
+        )
+
+      # Alice is 30 and active, Charlie is 35 and active
+      assert length(result) == 2
+    end
+  end
+
+  describe "runtime: sort" do
+    setup :create_test_users
+
+    test "sorts ascending", %{users: _users} do
+      {:ok, result} =
+        AshJido.Test.User.Jido.Read.run(
+          %{sort: [age: :asc]},
+          %{domain: AshJido.Test.Domain}
+        )
+
+      ages = Enum.map(result, & &1[:age])
+      assert ages == [25, 30, 35]
+    end
+
+    test "sorts descending", %{users: _users} do
+      {:ok, result} =
+        AshJido.Test.User.Jido.Read.run(
+          %{sort: [age: :desc]},
+          %{domain: AshJido.Test.Domain}
+        )
+
+      ages = Enum.map(result, & &1[:age])
+      assert ages == [35, 30, 25]
+    end
+  end
+
+  describe "runtime: limit and offset" do
+    setup :create_test_users
+
+    test "limits results", %{users: _users} do
+      {:ok, result} =
+        AshJido.Test.User.Jido.Read.run(
+          %{sort: [age: :asc], limit: 2},
+          %{domain: AshJido.Test.Domain}
+        )
+
+      assert length(result) == 2
+    end
+
+    test "offsets results", %{users: _users} do
+      {:ok, result} =
+        AshJido.Test.User.Jido.Read.run(
+          %{sort: [age: :asc], offset: 1},
+          %{domain: AshJido.Test.Domain}
+        )
+
+      assert length(result) == 2
+      assert hd(result)[:age] == 30
+    end
+
+    test "combines limit and offset", %{users: _users} do
+      {:ok, result} =
+        AshJido.Test.User.Jido.Read.run(
+          %{sort: [age: :asc], limit: 1, offset: 1},
+          %{domain: AshJido.Test.Domain}
+        )
+
+      assert length(result) == 1
+      assert hd(result)[:name] == "Alice"
+    end
+  end
+
+  describe "runtime: combined params" do
+    setup :create_test_users
+
+    test "filter + sort + limit", %{users: _users} do
+      {:ok, result} =
+        AshJido.Test.User.Jido.Read.run(
+          %{filter: %{active: true}, sort: [age: :desc], limit: 2},
+          %{domain: AshJido.Test.Domain}
+        )
+
+      assert length(result) == 2
+      ages = Enum.map(result, & &1[:age])
+      assert ages == [35, 30]
+    end
+  end
+
+  describe "runtime: no query params" do
+    setup :create_test_users
+
+    test "works normally without query params", %{users: _users} do
+      {:ok, result} =
+        AshJido.Test.User.Jido.Read.run(
+          %{},
+          %{domain: AshJido.Test.Domain}
+        )
+
+      # Should return all 3 users
+      assert length(result) == 3
+    end
+  end
+
+  describe "runtime: max_page_size enforcement" do
+    setup :create_test_users
+
+    test "clamps limit to max_page_size", %{users: _users} do
+      dsl_state = AshJido.Test.User.spark_dsl_config()
+
+      jido_action = %AshJido.Resource.JidoAction{
+        action: :read,
+        name: "list_with_max_page",
+        module_name: TestMaxPageSizeReadAction,
+        description: "List with max page size",
+        output_map?: true,
+        query_params?: true,
+        max_page_size: 2
+      }
+
+      module_name =
+        AshJido.Generator.generate_jido_action_module(
+          AshJido.Test.User,
+          jido_action,
+          dsl_state
+        )
+
+      # Request limit: 100, but max_page_size is 2
+      {:ok, result} =
+        module_name.run(
+          %{sort: [age: :asc], limit: 100},
+          %{domain: AshJido.Test.Domain}
+        )
+
+      assert length(result) == 2
+    end
+
+    test "does not clamp when limit is within max_page_size", %{users: _users} do
+      dsl_state = AshJido.Test.User.spark_dsl_config()
+
+      jido_action = %AshJido.Resource.JidoAction{
+        action: :read,
+        name: "list_with_max_page2",
+        module_name: TestMaxPageSize2ReadAction,
+        description: "List with max page size",
+        output_map?: true,
+        query_params?: true,
+        max_page_size: 10
+      }
+
+      module_name =
+        AshJido.Generator.generate_jido_action_module(
+          AshJido.Test.User,
+          jido_action,
+          dsl_state
+        )
+
+      # Request limit: 2, which is within max_page_size 10
+      {:ok, result} =
+        module_name.run(
+          %{sort: [age: :asc], limit: 2},
+          %{domain: AshJido.Test.Domain}
+        )
+
+      assert length(result) == 2
+    end
+  end
+
+  defp create_test_users(_context) do
+    opts = [domain: AshJido.Test.Domain]
+
+    user1 =
+      AshJido.Test.User
+      |> Ash.Changeset.for_create(
+        :register,
+        %{name: "Alice", email: "alice@example.com", age: 30},
+        opts
+      )
+      |> Ash.create!(opts)
+
+    user2 =
+      AshJido.Test.User
+      |> Ash.Changeset.for_create(
+        :register,
+        %{name: "Bob", email: "bob@example.com", age: 25},
+        opts
+      )
+      |> Ash.create!(opts)
+
+    user3 =
+      AshJido.Test.User
+      |> Ash.Changeset.for_create(
+        :register,
+        %{
+          name: "Charlie",
+          email: "charlie@example.com",
+          age: 35
+        },
+        opts
+      )
+      |> Ash.create!(opts)
+
+    %{users: [user1, user2, user3]}
+  end
 end

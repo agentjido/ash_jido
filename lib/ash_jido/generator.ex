@@ -145,11 +145,17 @@ defmodule AshJido.Generator do
                 {action_result, signal_emission, false}
 
               :read ->
-                result =
+                # Split query params from action arguments
+                {query_opts, action_params} = split_query_params(params, @jido_config)
+
+                # Build query: apply action args, then static load, then dynamic query opts
+                query =
                   @resource
-                  |> Ash.Query.for_read(@ash_action, params, ash_opts)
+                  |> Ash.Query.for_read(@ash_action, action_params, ash_opts)
                   |> maybe_load(@jido_config)
-                  |> Ash.read!(ash_opts)
+                  |> apply_query_opts(query_opts)
+
+                result = Ash.read!(query, ash_opts)
 
                 # Ash.read! returns a raw list, not {:ok, result}
                 # Pass it directly to Mapper.wrap_result which will wrap it
@@ -272,6 +278,51 @@ defmodule AshJido.Generator do
             nil -> query
             load -> Ash.Query.load(query, load)
           end
+        end
+
+        @query_param_keys [:filter, :sort, :limit, :offset, :load]
+
+        defp split_query_params(params, jido_config) do
+          if jido_config.query_params? do
+            {query_opts_map, action_params} = Map.split(params, @query_param_keys)
+
+            query_opts =
+              query_opts_map
+              |> Enum.reject(fn {_k, v} -> is_nil(v) end)
+              |> enforce_max_page_size(jido_config)
+
+            {query_opts, action_params}
+          else
+            {[], params}
+          end
+        end
+
+        defp enforce_max_page_size(query_opts, jido_config) do
+          case jido_config.max_page_size do
+            nil ->
+              query_opts
+
+            max when is_integer(max) ->
+              case Keyword.get(query_opts, :limit) do
+                limit when is_integer(limit) and limit > max ->
+                  Keyword.put(query_opts, :limit, max)
+
+                _ ->
+                  query_opts
+              end
+          end
+        end
+
+        defp apply_query_opts(query, []), do: query
+
+        defp apply_query_opts(query, query_opts) do
+          Enum.reduce(query_opts, query, fn
+            {:filter, filter_map}, q -> Ash.Query.filter_input(q, filter_map)
+            {:sort, sort_val}, q -> Ash.Query.sort_input(q, sort_val)
+            {:limit, limit}, q -> Ash.Query.limit(q, limit)
+            {:offset, offset}, q -> Ash.Query.offset(q, offset)
+            {:load, load}, q -> Ash.Query.load(q, load)
+          end)
         end
 
         defp maybe_add_notification_collection(ash_opts, config, action_type) do
