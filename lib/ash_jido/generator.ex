@@ -75,6 +75,13 @@ defmodule AshJido.Generator do
       |> maybe_put_option(:category, category)
       |> maybe_put_option(:vsn, vsn)
 
+    query_param_keys =
+      if ash_action.type == :read do
+        jido_action.action_parameters || [:filter, :sort, :limit, :offset]
+      else
+        []
+      end
+
     quote do
       defmodule unquote(module_name) do
         @moduledoc """
@@ -89,6 +96,7 @@ defmodule AshJido.Generator do
         @ash_action unquote(ash_action.name)
         @ash_action_type unquote(ash_action.type)
         @jido_config unquote(Macro.escape(jido_action))
+        @query_param_keys unquote(query_param_keys)
 
         def run(params, context) do
           ash_opts = AshJido.Context.extract_ash_opts!(context, @resource, @ash_action)
@@ -145,14 +153,19 @@ defmodule AshJido.Generator do
                 {action_result, signal_emission, false}
 
               :read ->
+                {query_params, action_params} =
+                  split_query_params(params, @query_param_keys)
+
                 result =
                   @resource
-                  |> Ash.Query.for_read(@ash_action, params, ash_opts)
+                  |> Ash.Query.for_read(@ash_action, action_params, ash_opts)
+                  |> maybe_apply_filter(query_params)
+                  |> maybe_apply_sort(query_params)
+                  |> maybe_apply_limit(query_params)
+                  |> maybe_apply_offset(query_params)
                   |> maybe_load(@jido_config)
                   |> Ash.read!(ash_opts)
 
-                # Ash.read! returns a raw list, not {:ok, result}
-                # Pass it directly to Mapper.wrap_result which will wrap it
                 action_result = AshJido.Mapper.wrap_result(result, @jido_config)
                 {action_result, empty_signal_meta(), false}
 
@@ -273,6 +286,68 @@ defmodule AshJido.Generator do
             load -> Ash.Query.load(query, load)
           end
         end
+
+        defp split_query_params(params, keys) do
+          Enum.reduce(keys, {%{}, params}, fn key, {query_acc, params_acc} ->
+            atom_key = key
+            string_key = to_string(key)
+
+            cond do
+              Map.has_key?(params_acc, atom_key) ->
+                {Map.put(query_acc, atom_key, Map.get(params_acc, atom_key)),
+                 Map.delete(params_acc, atom_key)}
+
+              Map.has_key?(params_acc, string_key) ->
+                {Map.put(query_acc, atom_key, Map.get(params_acc, string_key)),
+                 Map.delete(params_acc, string_key)}
+
+              true ->
+                {query_acc, params_acc}
+            end
+          end)
+        end
+
+        defp maybe_apply_filter(query, %{filter: filter}) when is_map(filter) and filter != %{} do
+          Ash.Query.filter_input(query, filter)
+        end
+
+        defp maybe_apply_filter(query, _), do: query
+
+        defp maybe_apply_sort(query, %{sort: sort}) when is_list(sort) and sort != [] do
+          sort_string =
+            sort
+            |> Enum.map_join(",", fn entry ->
+              field = Map.get(entry, :field) || Map.get(entry, "field")
+              direction = Map.get(entry, :direction) || Map.get(entry, "direction")
+
+              direction =
+                if is_atom(direction), do: to_string(direction), else: direction
+
+              if direction in ["desc", "desc_nils_first", "desc_nils_last"] do
+                "-#{field}"
+              else
+                "#{field}"
+              end
+            end)
+
+          Ash.Query.sort_input(query, sort_string)
+        end
+
+        defp maybe_apply_sort(query, _), do: query
+
+        defp maybe_apply_limit(query, %{limit: limit})
+             when is_integer(limit) and limit >= 0 do
+          Ash.Query.limit(query, limit)
+        end
+
+        defp maybe_apply_limit(query, _), do: query
+
+        defp maybe_apply_offset(query, %{offset: offset})
+             when is_integer(offset) and offset >= 0 do
+          Ash.Query.offset(query, offset)
+        end
+
+        defp maybe_apply_offset(query, _), do: query
 
         defp maybe_add_notification_collection(ash_opts, config, action_type) do
           if action_type in [:create, :update, :destroy] and config.emit_signals? do
