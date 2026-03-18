@@ -16,6 +16,7 @@ defmodule AshJido.TypeMapper do
     base_type = map_ash_type(ash_type)
 
     [type: base_type]
+    |> maybe_add_enum_constraint(field_config)
     |> maybe_add_required(field_config)
     |> maybe_add_doc(field_config)
     |> maybe_add_default(field_config)
@@ -70,4 +71,19 @@ defmodule AshJido.TypeMapper do
         options
     end
   end
+
+  # Converts Ash.Type.Atom with one_of constraints to {:in, string_values}
+  defp maybe_add_enum_constraint(opts, %{type: Ash.Type.Atom, constraints: constraints})
+       when is_list(constraints) do
+    case Keyword.get(constraints, :one_of) do
+      values when is_list(values) and values != [] ->
+        string_values = Enum.map(values, &to_string/1)
+        Keyword.put(opts, :type, {:in, string_values})
+
+      _ ->
+        opts
+    end
+  end
+
+  defp maybe_add_enum_constraint(opts, _field_config), do: opts
 end
