@@ -63,7 +63,7 @@ defmodule AshJido.Generator do
     vsn = jido_action.vsn
 
     # Build input schema including accepted attributes
-    schema = build_parameter_schema(resource, ash_action, dsl_state)
+    schema = build_parameter_schema(resource, ash_action, jido_action, dsl_state)
 
     action_use_opts =
       [
@@ -368,7 +368,7 @@ defmodule AshJido.Generator do
     end
   end
 
-  defp build_parameter_schema(resource, ash_action, dsl_state) do
+  defp build_parameter_schema(resource, ash_action, jido_action, dsl_state) do
     case ash_action.type do
       :create ->
         # Create actions use accepted attributes plus action arguments
@@ -389,8 +389,61 @@ defmodule AshJido.Generator do
 
       _ ->
         # Read and custom actions use their declared arguments
-        action_args_to_schema(ash_action.arguments || [])
+        base_schema = action_args_to_schema(ash_action.arguments || [])
+
+        if ash_action.type == :read and jido_action.query_params? do
+          base_schema ++ build_query_params_schema(jido_action)
+        else
+          base_schema
+        end
     end
+  end
+
+  defp build_query_params_schema(jido_action) do
+    max_page_doc =
+      if jido_action.max_page_size do
+        " Maximum: #{jido_action.max_page_size}."
+      else
+        ""
+      end
+
+    [
+      filter: [
+        type: :map,
+        required: false,
+        doc:
+          "Filter results using Ash's filter input syntax. " <>
+            "Simple equality: %{\"name\" => \"fred\"}. " <>
+            "Operators: %{\"age\" => %{\"greater_than\" => 25}}. " <>
+            "In: %{\"status\" => %{\"in\" => [\"active\", \"pending\"]}}. " <>
+            "Only public attributes are accessible."
+      ],
+      sort: [
+        type: :any,
+        required: false,
+        doc:
+          "Sort results. Keyword list: [name: :asc, age: :desc]. " <>
+            "String: \"name,-age\" (minus prefix = descending)."
+      ],
+      limit: [
+        type: :pos_integer,
+        required: false,
+        doc: "Maximum number of results to return.#{max_page_doc}"
+      ],
+      offset: [
+        type: :non_neg_integer,
+        required: false,
+        doc: "Number of results to skip."
+      ],
+      load: [
+        type: :any,
+        required: false,
+        doc:
+          "Relationships/calculations to load. " <>
+            "Examples: :author, [:author, :comments], [author: [:profile]]. " <>
+            "Merged with any static load configured on the action."
+      ]
+    ]
   end
 
   defp accepted_attributes_to_schema(_resource, ash_action, dsl_state) do

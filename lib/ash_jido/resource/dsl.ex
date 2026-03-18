@@ -136,6 +136,20 @@ defmodule AshJido.Resource.Dsl do
           type: :boolean,
           default: false,
           doc: "Emit telemetry spans for generated action execution"
+        ],
+        query_params?: [
+          type: :boolean,
+          required: false,
+          doc: """
+          Enable query parameters (filter, sort, limit, offset, load) for read actions.
+          Defaults to `true` for read actions. When enabled, the generated Jido action
+          accepts query parameters using Ash's safe input parsing (filter_input, sort_input).
+          """
+        ],
+        max_page_size: [
+          type: :pos_integer,
+          required: false,
+          doc: "Maximum page size (limit) for this action. Used to enforce query bounds at runtime."
         ]
       ]
     }
@@ -213,6 +227,16 @@ defmodule AshJido.Resource.Dsl do
           type: :boolean,
           default: false,
           doc: "Emit telemetry spans for generated action execution"
+        ],
+        read_query_params?: [
+          type: :boolean,
+          default: true,
+          doc: "Enable query parameters for auto-generated read actions."
+        ],
+        read_max_page_size: [
+          type: :pos_integer,
+          required: false,
+          doc: "Maximum page size for auto-generated read actions."
         ]
       ]
     }
