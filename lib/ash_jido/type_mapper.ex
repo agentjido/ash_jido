@@ -23,6 +23,33 @@ defmodule AshJido.TypeMapper do
   end
 
   @doc """
+  Converts an Ash TypedStruct module to a NimbleOptions keyword list schema.
+
+  This is useful for generating structured output schemas for LLM calls
+  via ReqLLM.generate_object/4.
+
+  ## Examples
+
+      iex> AshJido.TypeMapper.typed_struct_to_schema(MyApp.PersonResult)
+      [
+        name: [type: :string, required: true, doc: "The person's name"],
+        age: [type: :integer, doc: "The person's age"]
+      ]
+  """
+  @spec typed_struct_to_schema(module()) :: keyword()
+  def typed_struct_to_schema(module) when is_atom(module) do
+    # Get field definitions from the TypedStruct's subtype_constraints
+    constraints = module.subtype_constraints()
+    fields = Keyword.get(constraints, :fields, [])
+
+    Keyword.new(fields, fn {name, field_opts} ->
+      field_config = Map.new(field_opts)
+      opts = ash_type_to_nimble_options(field_config[:type], field_config)
+      {name, opts}
+    end)
+  end
+
+  @doc """
   Maps an Ash type to its corresponding NimbleOptions type.
   """
   def map_ash_type(ash_type) do
