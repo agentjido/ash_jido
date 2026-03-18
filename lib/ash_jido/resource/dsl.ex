@@ -114,6 +114,11 @@ defmodule AshJido.Resource.Dsl do
           type: :any,
           doc: "Static Ash.Query.load statement to apply to generated read actions"
         ],
+        action_parameters: [
+          type: {:list, {:in, [:filter, :sort, :limit, :offset]}},
+          doc:
+            "Query parameters to expose for read actions. Defaults to all (filter, sort, limit, offset). Set to a subset to restrict."
+        ],
         emit_signals?: [
           type: :boolean,
           default: false,
@@ -189,6 +194,11 @@ defmodule AshJido.Resource.Dsl do
         read_load: [
           type: :any,
           doc: "Static Ash.Query.load statement applied to all auto-generated read actions"
+        ],
+        read_action_parameters: [
+          type: {:list, {:in, [:filter, :sort, :limit, :offset]}},
+          doc:
+            "Query parameters to expose for auto-generated read actions. Defaults to all (filter, sort, limit, offset). Set to a subset to restrict."
         ],
         emit_signals?: [
           type: :boolean,
