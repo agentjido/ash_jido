@@ -137,6 +137,20 @@ defmodule AshJido.TypeMapperTest do
       assert TypeMapper.ash_type_to_nimble_options(Ash.Type.String, options) ==
                [type: :string]
     end
+
+    test "converts Ash.Type.Atom with one_of constraints to {:in, string_values}" do
+      options = %{type: Ash.Type.Atom, constraints: [one_of: [:a, :b, :c]]}
+
+      result = TypeMapper.ash_type_to_nimble_options(Ash.Type.Atom, options)
+      assert result[:type] == {:in, ["a", "b", "c"]}
+    end
+
+    test "leaves Ash.Type.Atom as :atom when no one_of constraint" do
+      options = %{type: Ash.Type.Atom, constraints: []}
+
+      result = TypeMapper.ash_type_to_nimble_options(Ash.Type.Atom, options)
+      assert result[:type] == :atom
+    end
   end
 
   describe "edge cases and complex scenarios" do
