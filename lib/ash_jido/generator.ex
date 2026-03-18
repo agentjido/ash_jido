@@ -63,7 +63,7 @@ defmodule AshJido.Generator do
     vsn = jido_action.vsn
 
     # Build input schema including accepted attributes
-    schema = build_parameter_schema(resource, ash_action, dsl_state)
+    schema = build_parameter_schema(resource, ash_action, jido_action, dsl_state)
 
     action_use_opts =
       [
@@ -368,7 +368,7 @@ defmodule AshJido.Generator do
     end
   end
 
-  defp build_parameter_schema(resource, ash_action, dsl_state) do
+  defp build_parameter_schema(resource, ash_action, jido_action, dsl_state) do
     case ash_action.type do
       :create ->
         # Create actions use accepted attributes plus action arguments
@@ -387,10 +387,58 @@ defmodule AshJido.Generator do
         # Destroy actions just need an id
         [id: [type: :string, required: true, doc: "ID of record to destroy"]]
 
+      :read ->
+        action_args = action_args_to_schema(ash_action.arguments || [])
+        query_params = build_query_param_schema(resource, jido_action, dsl_state)
+        action_args ++ query_params
+
       _ ->
-        # Read and custom actions use their declared arguments
+        # Custom actions use their declared arguments
         action_args_to_schema(ash_action.arguments || [])
     end
+  end
+
+  defp build_query_param_schema(_resource, jido_action, dsl_state) do
+    enabled_params = jido_action.action_parameters || [:filter, :sort, :limit, :offset]
+
+    all_attributes = Transformer.get_entities(dsl_state, [:attributes])
+
+    filterable_names =
+      all_attributes
+      |> Enum.filter(fn attr ->
+        Map.get(attr, :public?, false) && Map.get(attr, :filterable?, true)
+      end)
+      |> Enum.map(& &1.name)
+
+    sortable_names =
+      all_attributes
+      |> Enum.filter(fn attr ->
+        Map.get(attr, :public?, false) && Map.get(attr, :sortable?, true)
+      end)
+      |> Enum.map(& &1.name)
+
+    all_params = [
+      filter: [
+        type: :map,
+        doc:
+          "Filter results. Map of field => %{operator => value}. Fields: #{inspect(filterable_names)}. Operators: eq, not_eq, gt, gte, lt, lte, in, is_nil"
+      ],
+      sort: [
+        type: {:list, :map},
+        doc:
+          "Sort results. List of %{field: name, direction: asc|desc}. Fields: #{inspect(sortable_names)}"
+      ],
+      limit: [
+        type: :non_neg_integer,
+        doc: "Maximum number of results to return"
+      ],
+      offset: [
+        type: :non_neg_integer,
+        doc: "Number of results to skip"
+      ]
+    ]
+
+    Enum.filter(all_params, fn {key, _opts} -> key in enabled_params end)
   end
 
   defp accepted_attributes_to_schema(_resource, ash_action, dsl_state) do
