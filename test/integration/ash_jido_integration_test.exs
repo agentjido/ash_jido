@@ -186,13 +186,14 @@ defmodule AshJido.IntegrationTest do
       by_email_module = User.Jido.ByEmail
       assert by_email_module.name() == "find_user_by_email"
 
-      # Read actions only include action arguments, no hardcoded params
+      # Read actions include action arguments and query parameters
       schema = by_email_module.schema()
       # Action-specific argument from the :by_email action
       assert Keyword.has_key?(schema, :email)
-      # Should NOT have hardcoded params
+      # Should NOT have hardcoded id param
       refute Keyword.has_key?(schema, :id)
-      refute Keyword.has_key?(schema, :limit)
+      # Should have query parameters for read actions
+      assert Keyword.has_key?(schema, :limit)
     end
 
     test "Post resource integration works" do

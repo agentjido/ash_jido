@@ -150,9 +150,12 @@ defmodule AshJido.GeneratorTest do
       assert Code.ensure_loaded?(module_name)
       assert module_name.name() == "list_all"
 
-      # Read actions only use action arguments (no hardcoded params)
+      # Read actions include query parameters (filter, sort, limit, offset)
       schema = module_name.schema()
-      assert schema == []
+      assert Keyword.has_key?(schema, :filter)
+      assert Keyword.has_key?(schema, :sort)
+      assert Keyword.has_key?(schema, :limit)
+      assert Keyword.has_key?(schema, :offset)
     end
 
     test "raises error for non-existent action" do
