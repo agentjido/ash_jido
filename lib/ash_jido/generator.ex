@@ -289,16 +289,14 @@ defmodule AshJido.Generator do
 
         defp split_query_params(params, keys) do
           Enum.reduce(keys, {%{}, params}, fn key, {query_acc, params_acc} ->
-            atom_key = key
             string_key = to_string(key)
 
             cond do
-              Map.has_key?(params_acc, atom_key) ->
-                {Map.put(query_acc, atom_key, Map.get(params_acc, atom_key)),
-                 Map.delete(params_acc, atom_key)}
+              Map.has_key?(params_acc, key) ->
+                {Map.put(query_acc, key, Map.get(params_acc, key)), Map.delete(params_acc, key)}
 
               Map.has_key?(params_acc, string_key) ->
-                {Map.put(query_acc, atom_key, Map.get(params_acc, string_key)),
+                {Map.put(query_acc, key, Map.get(params_acc, string_key)),
                  Map.delete(params_acc, string_key)}
 
               true ->

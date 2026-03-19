@@ -256,5 +256,16 @@ defmodule AshJido.QueryParametersTest do
       assert length(results) == 1
       assert hd(results)[:name] == "Apple"
     end
+
+    test "string keys work for sort", %{items: _items} do
+      {:ok, results} =
+        Item.Jido.Read.run(
+          %{"sort" => [%{"field" => "price", "direction" => "desc"}]},
+          %{domain: Domain}
+        )
+
+      names = Enum.map(results, & &1[:name])
+      assert names == ["Cherry", "Date", "Apple", "Banana"]
+    end
   end
 end
