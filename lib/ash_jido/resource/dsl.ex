@@ -116,6 +116,7 @@ defmodule AshJido.Resource.Dsl do
         ],
         action_parameters: [
           type: {:list, {:in, [:filter, :sort, :limit, :offset]}},
+          default: [:filter, :sort, :limit, :offset],
           doc:
             "Query parameters to expose for read actions. Defaults to all (filter, sort, limit, offset). Set to a subset to restrict."
         ],
@@ -197,6 +198,7 @@ defmodule AshJido.Resource.Dsl do
         ],
         read_action_parameters: [
           type: {:list, {:in, [:filter, :sort, :limit, :offset]}},
+          default: [:filter, :sort, :limit, :offset],
           doc:
             "Query parameters to expose for auto-generated read actions. Defaults to all (filter, sort, limit, offset). Set to a subset to restrict."
         ],

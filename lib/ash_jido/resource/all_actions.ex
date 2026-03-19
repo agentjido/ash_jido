@@ -10,11 +10,11 @@ defmodule AshJido.Resource.AllActions do
     :tags,
     :vsn,
     :read_load,
-    :read_action_parameters,
     :signal_dispatch,
     :signal_type,
     :signal_source,
     :__spark_metadata__,
+    read_action_parameters: [:filter, :sort, :limit, :offset],
     emit_signals?: false,
     telemetry?: false
   ]
@@ -26,7 +26,7 @@ defmodule AshJido.Resource.AllActions do
           tags: [String.t()] | nil,
           vsn: String.t() | nil,
           read_load: term() | nil,
-          read_action_parameters: [:filter | :sort | :limit | :offset] | nil,
+          read_action_parameters: [:filter | :sort | :limit | :offset],
           signal_dispatch: term() | nil,
           signal_type: String.t() | nil,
           signal_source: String.t() | nil,

@@ -77,7 +77,7 @@ defmodule AshJido.Generator do
 
     query_param_keys =
       if ash_action.type == :read do
-        jido_action.action_parameters || [:filter, :sort, :limit, :offset]
+        jido_action.action_parameters
       else
         []
       end
@@ -484,7 +484,7 @@ defmodule AshJido.Generator do
   end
 
   defp build_query_param_schema(_resource, jido_action, dsl_state) do
-    enabled_params = jido_action.action_parameters || [:filter, :sort, :limit, :offset]
+    enabled_params = jido_action.action_parameters
 
     all_attributes = Transformer.get_entities(dsl_state, [:attributes])
 
