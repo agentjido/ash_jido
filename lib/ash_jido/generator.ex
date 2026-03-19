@@ -314,23 +314,33 @@ defmodule AshJido.Generator do
         defp maybe_apply_filter(query, _), do: query
 
         defp maybe_apply_sort(query, %{sort: sort}) when is_list(sort) and sort != [] do
-          sort_string =
+          sort_entries =
             sort
-            |> Enum.map_join(",", fn entry ->
+            |> Enum.flat_map(fn entry ->
               field = Map.get(entry, :field) || Map.get(entry, "field")
-              direction = Map.get(entry, :direction) || Map.get(entry, "direction")
 
-              direction =
-                if is_atom(direction), do: to_string(direction), else: direction
-
-              if direction in ["desc", "desc_nils_first", "desc_nils_last"] do
-                "-#{field}"
+              if is_nil(field) do
+                []
               else
-                "#{field}"
+                direction = Map.get(entry, :direction) || Map.get(entry, "direction")
+
+                direction =
+                  if is_atom(direction), do: to_string(direction), else: direction || "asc"
+
+                prefix =
+                  case direction do
+                    d when d in ["desc", "desc_nils_first", "desc_nils_last"] -> "-"
+                    _ -> ""
+                  end
+
+                ["#{prefix}#{field}"]
               end
             end)
 
-          Ash.Query.sort_input(query, sort_string)
+          case sort_entries do
+            [] -> query
+            entries -> Ash.Query.sort_input(query, Enum.join(entries, ","))
+          end
         end
 
         defp maybe_apply_sort(query, _), do: query
