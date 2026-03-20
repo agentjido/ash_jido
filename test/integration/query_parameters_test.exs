@@ -19,6 +19,10 @@ defmodule AshJido.QueryParametersTest do
       attribute(:category, :string, public?: true)
     end
 
+    calculations do
+      calculate(:expensive?, :boolean, expr(price > 10), public?: true)
+    end
+
     actions do
       defaults([:read, :destroy])
 
@@ -128,13 +132,14 @@ defmodule AshJido.QueryParametersTest do
       refute Keyword.has_key?(schema, :offset)
     end
 
-    test "schema docs list public filterable attribute names" do
+    test "schema docs list public filterable attribute and calculation names" do
       schema = Item.Jido.Read.schema()
       filter_doc = schema[:filter][:doc]
 
       assert filter_doc =~ "name"
       assert filter_doc =~ "price"
       assert filter_doc =~ "active"
+      assert filter_doc =~ "expensive?"
     end
   end
 

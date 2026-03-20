@@ -500,28 +500,48 @@ defmodule AshJido.Generator do
 
   # Builds NimbleOptions schema entries for query parameters (filter, sort,
   # limit, offset). Only includes params enabled via action_parameters config.
-  # Schema doc strings list public filterable/sortable attribute names to guide
-  # LLM tool usage.
+  # Schema doc strings list public filterable/sortable field names (attributes
+  # and expression calculations) to guide LLM tool usage.
   defp build_query_param_schema(_resource, jido_action, dsl_state) do
     enabled_params = jido_action.action_parameters
 
     all_attributes = Transformer.get_entities(dsl_state, [:attributes])
+    all_calculations = Transformer.get_entities(dsl_state, [:calculations])
 
-    # Only public + filterable attributes are listed in filter docs
-    filterable_names =
+    # Public attributes that are filterable/sortable
+    filterable_attr_names =
       all_attributes
       |> Enum.filter(fn attr ->
         Map.get(attr, :public?, false) && Map.get(attr, :filterable?, true)
       end)
       |> Enum.map(& &1.name)
 
-    # Only public + sortable attributes are listed in sort docs
-    sortable_names =
+    sortable_attr_names =
       all_attributes
       |> Enum.filter(fn attr ->
         Map.get(attr, :public?, false) && Map.get(attr, :sortable?, true)
       end)
       |> Enum.map(& &1.name)
+
+    # Public expression calculations that are filterable/sortable
+    filterable_calc_names =
+      all_calculations
+      |> Enum.filter(fn calc ->
+        Map.get(calc, :public?, false) && Map.get(calc, :filterable?, true) &&
+          has_expression?(calc)
+      end)
+      |> Enum.map(& &1.name)
+
+    sortable_calc_names =
+      all_calculations
+      |> Enum.filter(fn calc ->
+        Map.get(calc, :public?, false) && Map.get(calc, :sortable?, true) &&
+          has_expression?(calc)
+      end)
+      |> Enum.map(& &1.name)
+
+    filterable_names = filterable_attr_names ++ filterable_calc_names
+    sortable_names = sortable_attr_names ++ sortable_calc_names
 
     all_params = [
       filter: [
@@ -613,4 +633,14 @@ defmodule AshJido.Generator do
 
   defp maybe_put_option(opts, _key, nil), do: opts
   defp maybe_put_option(opts, key, value), do: Keyword.put(opts, key, value)
+
+  # Checks if a calculation has an expression implementation, which is required
+  # for it to be filterable/sortable at the query level. Must ensure the module
+  # is compiled first, as function_exported? returns false for unloaded modules.
+  defp has_expression?(%{calculation: {module, _opts}}) do
+    Code.ensure_compiled!(module)
+    function_exported?(module, :expression, 2)
+  end
+
+  defp has_expression?(_), do: false
 end
