@@ -211,6 +211,32 @@ defmodule AshJido.QueryParametersTest do
       assert Enum.drop(categories, 2) == [nil, nil]
     end
 
+    test "sort desc_nils_first puts nils before values", %{items: _items} do
+      {:ok, results} =
+        Item.Jido.Read.run(
+          %{sort: [%{field: :category, direction: :desc_nils_first}]},
+          %{domain: Domain}
+        )
+
+      categories = Enum.map(results, & &1[:category])
+      # Nils come first, then descending values
+      assert Enum.take(categories, 2) == [nil, nil]
+      assert Enum.drop(categories, 2) == ["fruit", "fruit"]
+    end
+
+    test "sort asc_nils_last puts nils after values", %{items: _items} do
+      {:ok, results} =
+        Item.Jido.Read.run(
+          %{sort: [%{field: :category, direction: :asc_nils_last}]},
+          %{domain: Domain}
+        )
+
+      categories = Enum.map(results, & &1[:category])
+      # Values come first, then nils
+      assert Enum.take(categories, 2) == ["fruit", "fruit"]
+      assert Enum.drop(categories, 2) == [nil, nil]
+    end
+
     test "sort with multiple fields", %{items: _items} do
       {:ok, results} =
         Item.Jido.Read.run(

@@ -324,10 +324,10 @@ defmodule AshJido.Generator do
         defp maybe_apply_filter(query, _), do: query
 
         # Converts sort entries like [%{field: "name", direction: "desc"}] into
-        # Ash.Query.sort_input format: comma-separated string with "-" prefix for
-        # descending (e.g., "-name,price"). Skips entries with missing field.
+        # {field, direction} tuples for Ash.Query.sort_input/2. Supports all 6
+        # Ash sort orders. Skips entries with missing field.
         defp maybe_apply_sort(query, %{sort: sort}) when is_list(sort) and sort != [] do
-          sort_entries =
+          sort_tuples =
             sort
             |> Enum.flat_map(fn entry ->
               field = Map.get(entry, :field) || Map.get(entry, "field")
@@ -335,29 +335,20 @@ defmodule AshJido.Generator do
               if is_nil(field) do
                 []
               else
-                direction = Map.get(entry, :direction) || Map.get(entry, "direction")
+                field = if is_binary(field), do: String.to_existing_atom(field), else: field
+
+                direction = Map.get(entry, :direction) || Map.get(entry, "direction") || "asc"
 
                 direction =
-                  if is_atom(direction), do: to_string(direction), else: direction || "asc"
+                  if is_binary(direction), do: String.to_existing_atom(direction), else: direction
 
-                # Ash.Sort.parse_sort prefix conventions:
-                # no prefix or "+" = asc, "-" = desc,
-                # "++" = asc_nils_first, "--" = desc_nils_last
-                prefix =
-                  case direction do
-                    "desc" -> "-"
-                    "desc_nils_last" -> "--"
-                    "asc_nils_first" -> "++"
-                    _ -> ""
-                  end
-
-                ["#{prefix}#{field}"]
+                [{field, direction}]
               end
             end)
 
-          case sort_entries do
+          case sort_tuples do
             [] -> query
-            entries -> Ash.Query.sort_input(query, Enum.join(entries, ","))
+            tuples -> Ash.Query.sort_input(query, tuples)
           end
         end
 
