@@ -70,12 +70,49 @@ defmodule AshJido.QueryParametersTest do
     end
   end
 
+  defmodule ItemWithExcludedFields do
+    use Ash.Resource,
+      domain: nil,
+      extensions: [AshJido],
+      data_layer: Ash.DataLayer.Ets
+
+    ets do
+      private?(true)
+    end
+
+    attributes do
+      uuid_primary_key(:id)
+      attribute(:name, :string, allow_nil?: false, public?: true)
+      # Array type — should be excluded from filter/sort
+      attribute(:tags, {:array, :string}, default: [], public?: true)
+      # Private — should be excluded
+      attribute(:internal_note, :string)
+      # Non-filterable — should be excluded from filter but included in sort
+      attribute(:score, :integer, public?: true, filterable?: false)
+      # Non-sortable — should be excluded from sort but included in filter
+      attribute(:rank, :integer, public?: true, sortable?: false)
+    end
+
+    actions do
+      defaults([:read])
+
+      create :create do
+        accept([:name, :tags, :internal_note, :score, :rank])
+      end
+    end
+
+    jido do
+      all_actions(only: [:read])
+    end
+  end
+
   defmodule Domain do
     use Ash.Domain, validate_config_inclusion?: false
 
     resources do
       resource(Item)
       resource(RestrictedItem)
+      resource(ItemWithExcludedFields)
     end
   end
 
@@ -140,6 +177,30 @@ defmodule AshJido.QueryParametersTest do
       assert filter_doc =~ "price"
       assert filter_doc =~ "active"
       assert filter_doc =~ "expensive?"
+    end
+
+    test "array types are excluded from filter and sort" do
+      schema = ItemWithExcludedFields.Jido.Read.schema()
+      refute schema[:filter][:doc] =~ "tags"
+      refute schema[:sort][:doc] =~ "tags"
+    end
+
+    test "private attributes are excluded from filter and sort" do
+      schema = ItemWithExcludedFields.Jido.Read.schema()
+      refute schema[:filter][:doc] =~ "internal_note"
+      refute schema[:sort][:doc] =~ "internal_note"
+    end
+
+    test "non-filterable attributes are excluded from filter but included in sort" do
+      schema = ItemWithExcludedFields.Jido.Read.schema()
+      refute schema[:filter][:doc] =~ "score"
+      assert schema[:sort][:doc] =~ "score"
+    end
+
+    test "non-sortable attributes are excluded from sort but included in filter" do
+      schema = ItemWithExcludedFields.Jido.Read.schema()
+      assert schema[:filter][:doc] =~ "rank"
+      refute schema[:sort][:doc] =~ "rank"
     end
   end
 

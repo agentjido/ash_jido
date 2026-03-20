@@ -325,7 +325,10 @@ defmodule AshJido.Generator do
 
         # Converts sort entries like [%{field: "name", direction: "desc"}] into
         # {field, direction} tuples for Ash.Query.sort_input/2. Supports all 6
-        # Ash sort orders. Skips entries with missing field.
+        # Ash sort orders. Skips entries with missing field. Field names are
+        # passed as-is (strings or atoms) — Ash resolves them. Direction is
+        # normalized to an atom from the valid set; invalid values default to :asc.
+        @valid_sort_directions ~w(asc desc asc_nils_first asc_nils_last desc_nils_first desc_nils_last)a
         defp maybe_apply_sort(query, %{sort: sort}) when is_list(sort) and sort != [] do
           sort_tuples =
             sort
@@ -335,13 +338,8 @@ defmodule AshJido.Generator do
               if is_nil(field) do
                 []
               else
-                field = if is_binary(field), do: String.to_existing_atom(field), else: field
-
-                direction = Map.get(entry, :direction) || Map.get(entry, "direction") || "asc"
-
-                direction =
-                  if is_binary(direction), do: String.to_existing_atom(direction), else: direction
-
+                direction = Map.get(entry, :direction) || Map.get(entry, "direction") || :asc
+                direction = normalize_sort_direction(direction)
                 [{field, direction}]
               end
             end)
@@ -367,6 +365,18 @@ defmodule AshJido.Generator do
         end
 
         defp maybe_apply_offset(query, _), do: query
+
+        defp normalize_sort_direction(dir) when dir in @valid_sort_directions, do: dir
+
+        defp normalize_sort_direction(dir) when is_binary(dir) do
+          try do
+            dir |> String.to_existing_atom() |> normalize_sort_direction()
+          rescue
+            ArgumentError -> :asc
+          end
+        end
+
+        defp normalize_sort_direction(_), do: :asc
 
         defp maybe_add_notification_collection(ash_opts, config, action_type) do
           if action_type in [:create, :update, :destroy] and config.emit_signals? do
