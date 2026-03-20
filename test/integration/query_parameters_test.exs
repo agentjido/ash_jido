@@ -16,13 +16,14 @@ defmodule AshJido.QueryParametersTest do
       attribute(:name, :string, allow_nil?: false, public?: true)
       attribute(:price, :integer, allow_nil?: false, public?: true)
       attribute(:active, :boolean, default: true, public?: true)
+      attribute(:category, :string, public?: true)
     end
 
     actions do
       defaults([:read, :destroy])
 
       create :create do
-        accept([:name, :price, :active])
+        accept([:name, :price, :active, :category])
       end
 
       read :by_name do
@@ -75,11 +76,20 @@ defmodule AshJido.QueryParametersTest do
   end
 
   setup do
-    # Seed test data
+    # Seed test data — Apple and Cherry have categories, Banana and Date have nil
     items =
-      for {name, price} <- [{"Apple", 5}, {"Banana", 3}, {"Cherry", 12}, {"Date", 8}] do
+      for {name, price, category} <- [
+            {"Apple", 5, "fruit"},
+            {"Banana", 3, nil},
+            {"Cherry", 12, "fruit"},
+            {"Date", 8, nil}
+          ] do
         Item
-        |> Ash.Changeset.for_create(:create, %{name: name, price: price}, domain: Domain)
+        |> Ash.Changeset.for_create(
+          :create,
+          %{name: name, price: price, category: category},
+          domain: Domain
+        )
         |> Ash.create!(domain: Domain)
       end
 
@@ -173,6 +183,49 @@ defmodule AshJido.QueryParametersTest do
 
       names = Enum.map(results, & &1[:name])
       assert names == ["Cherry", "Date", "Apple", "Banana"]
+    end
+
+    test "sort asc_nils_first puts nils before values", %{items: _items} do
+      {:ok, results} =
+        Item.Jido.Read.run(
+          %{sort: [%{field: :category, direction: :asc_nils_first}]},
+          %{domain: Domain}
+        )
+
+      categories = Enum.map(results, & &1[:category])
+      # Nils come first, then sorted values
+      assert Enum.take(categories, 2) == [nil, nil]
+      assert Enum.drop(categories, 2) == ["fruit", "fruit"]
+    end
+
+    test "sort desc_nils_last puts nils after values", %{items: _items} do
+      {:ok, results} =
+        Item.Jido.Read.run(
+          %{sort: [%{field: :category, direction: :desc_nils_last}]},
+          %{domain: Domain}
+        )
+
+      categories = Enum.map(results, & &1[:category])
+      # Values come first, then nils
+      assert Enum.take(categories, 2) == ["fruit", "fruit"]
+      assert Enum.drop(categories, 2) == [nil, nil]
+    end
+
+    test "sort with multiple fields", %{items: _items} do
+      {:ok, results} =
+        Item.Jido.Read.run(
+          %{
+            sort: [
+              %{field: :category, direction: :asc_nils_first},
+              %{field: :name, direction: :asc}
+            ]
+          },
+          %{domain: Domain}
+        )
+
+      names = Enum.map(results, & &1[:name])
+      # Nils first (Banana, Date sorted by name), then "fruit" (Apple, Cherry sorted by name)
+      assert names == ["Banana", "Date", "Apple", "Cherry"]
     end
   end
 
