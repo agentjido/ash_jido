@@ -500,48 +500,31 @@ defmodule AshJido.Generator do
 
   # Builds NimbleOptions schema entries for query parameters (filter, sort,
   # limit, offset). Only includes params enabled via action_parameters config.
-  # Schema doc strings list public filterable/sortable field names (attributes
-  # and expression calculations) to guide LLM tool usage.
-  defp build_query_param_schema(_resource, jido_action, dsl_state) do
+  # Schema doc strings list public filterable/sortable field names (attributes,
+  # calculations, aggregates) to guide LLM tool usage. Field validation logic
+  # follows ash_json_api's pattern for type safety.
+  defp build_query_param_schema(resource, jido_action, dsl_state) do
     enabled_params = jido_action.action_parameters
 
-    all_attributes = Transformer.get_entities(dsl_state, [:attributes])
-    all_calculations = Transformer.get_entities(dsl_state, [:calculations])
+    # Use Transformer.get_entities for compile-time introspection (resource
+    # module isn't fully compiled yet when this runs). Collect attributes,
+    # calculations, and aggregates, then apply ash_json_api-style type checks.
+    all_fields =
+      Transformer.get_entities(dsl_state, [:attributes]) ++
+        Transformer.get_entities(dsl_state, [:calculations]) ++
+        Transformer.get_entities(dsl_state, [:aggregates])
 
-    # Public attributes that are filterable/sortable
-    filterable_attr_names =
-      all_attributes
-      |> Enum.filter(fn attr ->
-        Map.get(attr, :public?, false) && Map.get(attr, :filterable?, true)
-      end)
+    public_fields = Enum.filter(all_fields, &Map.get(&1, :public?, false))
+
+    filterable_names =
+      public_fields
+      |> Enum.filter(&filterable?(&1, resource))
       |> Enum.map(& &1.name)
 
-    sortable_attr_names =
-      all_attributes
-      |> Enum.filter(fn attr ->
-        Map.get(attr, :public?, false) && Map.get(attr, :sortable?, true)
-      end)
+    sortable_names =
+      public_fields
+      |> Enum.filter(&sortable?(&1, resource))
       |> Enum.map(& &1.name)
-
-    # Public expression calculations that are filterable/sortable
-    filterable_calc_names =
-      all_calculations
-      |> Enum.filter(fn calc ->
-        Map.get(calc, :public?, false) && Map.get(calc, :filterable?, true) &&
-          has_expression?(calc)
-      end)
-      |> Enum.map(& &1.name)
-
-    sortable_calc_names =
-      all_calculations
-      |> Enum.filter(fn calc ->
-        Map.get(calc, :public?, false) && Map.get(calc, :sortable?, true) &&
-          has_expression?(calc)
-      end)
-      |> Enum.map(& &1.name)
-
-    filterable_names = filterable_attr_names ++ filterable_calc_names
-    sortable_names = sortable_attr_names ++ sortable_calc_names
 
     all_params = [
       filter: [
@@ -634,13 +617,102 @@ defmodule AshJido.Generator do
   defp maybe_put_option(opts, _key, nil), do: opts
   defp maybe_put_option(opts, key, value), do: Keyword.put(opts, key, value)
 
-  # Checks if a calculation has an expression implementation, which is required
-  # for it to be filterable/sortable at the query level. Must ensure the module
-  # is compiled first, as function_exported? returns false for unloaded modules.
-  defp has_expression?(%{calculation: {module, _opts}}) do
-    Code.ensure_compiled!(module)
-    function_exported?(module, :expression, 2)
+  # Field filterability/sortability checks adapted from ash_json_api.
+  # Rejects array types, unions, embedded types, and fields explicitly marked
+  # as non-filterable/sortable. For calculations, requires an expression
+  # implementation. For aggregates, resolves the underlying type first.
+
+  defp filterable?(%Ash.Resource.Aggregate{} = aggregate, resource) do
+    {type, constraints} = resolve_aggregate_type(aggregate, resource)
+
+    filterable?(
+      %Ash.Resource.Attribute{name: aggregate.name, type: type, constraints: constraints},
+      resource
+    )
   end
 
-  defp has_expression?(_), do: false
+  defp filterable?(%{type: {:array, _}}, _), do: false
+  defp filterable?(%{filterable?: false}, _), do: false
+  defp filterable?(%{type: Ash.Type.Union}, _), do: false
+
+  defp filterable?(%Ash.Resource.Calculation{type: type, calculation: {module, _opts}}, _) do
+    Code.ensure_compiled!(module)
+    !embedded_type?(type) && function_exported?(module, :expression, 2)
+  end
+
+  defp filterable?(%{type: type} = field, resource) do
+    if Ash.Type.NewType.new_type?(type) do
+      filterable?(
+        %{
+          field
+          | constraints: Ash.Type.NewType.constraints(type, field.constraints),
+            type: Ash.Type.NewType.subtype_of(type)
+        },
+        resource
+      )
+    else
+      !embedded_type?(type)
+    end
+  end
+
+  defp filterable?(_, _), do: false
+
+  defp sortable?(%Ash.Resource.Aggregate{} = aggregate, resource) do
+    {type, constraints} = resolve_aggregate_type(aggregate, resource)
+
+    sortable?(
+      %Ash.Resource.Attribute{name: aggregate.name, type: type, constraints: constraints},
+      resource
+    )
+  end
+
+  defp sortable?(%{type: {:array, _}}, _), do: false
+  defp sortable?(%{sortable?: false}, _), do: false
+  defp sortable?(%{type: Ash.Type.Union}, _), do: false
+
+  defp sortable?(%Ash.Resource.Calculation{type: type, calculation: {module, _opts}}, _) do
+    Code.ensure_compiled!(module)
+    !embedded_type?(type) && function_exported?(module, :expression, 2)
+  end
+
+  defp sortable?(%{type: type} = field, resource) do
+    if Ash.Type.NewType.new_type?(type) do
+      sortable?(
+        %{
+          field
+          | constraints: Ash.Type.NewType.constraints(type, field.constraints),
+            type: Ash.Type.NewType.subtype_of(type)
+        },
+        resource
+      )
+    else
+      !embedded_type?(type)
+    end
+  end
+
+  defp sortable?(_, _), do: false
+
+  defp resolve_aggregate_type(aggregate, resource) do
+    attribute =
+      with field when not is_nil(field) <- aggregate.field,
+           related when not is_nil(related) <-
+             Ash.Resource.Info.related(resource, aggregate.relationship_path),
+           attr when not is_nil(attr) <- Ash.Resource.Info.field(related, aggregate.field) do
+        attr
+      end
+
+    field_type = if attribute, do: attribute.type
+    field_constraints = if attribute, do: attribute.constraints
+
+    {:ok, type, constraints} =
+      Ash.Query.Aggregate.kind_to_type(aggregate.kind, field_type, field_constraints)
+
+    {type, constraints}
+  end
+
+  defp embedded_type?({:array, type}), do: embedded_type?(type)
+
+  defp embedded_type?(type) do
+    Ash.Resource.Info.resource?(type) || Ash.Type.embedded_type?(type)
+  end
 end
