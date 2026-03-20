@@ -75,6 +75,9 @@ defmodule AshJido.Generator do
       |> maybe_put_option(:category, category)
       |> maybe_put_option(:vsn, vsn)
 
+    # Query param keys (filter, sort, limit, offset) are only relevant for read
+    # actions. At runtime, these keys are split out of params before building the
+    # Ash query, then applied as separate Ash.Query calls.
     query_param_keys =
       if ash_action.type == :read do
         jido_action.action_parameters
@@ -153,6 +156,9 @@ defmodule AshJido.Generator do
                 {action_result, signal_emission, false}
 
               :read ->
+                # Separate query params (filter/sort/limit/offset) from action
+                # arguments so action args go to for_read and query params are
+                # applied as Ash.Query pipeline steps.
                 {query_params, action_params} =
                   split_query_params(params, @query_param_keys)
 
@@ -287,18 +293,24 @@ defmodule AshJido.Generator do
           end
         end
 
+        # Splits query parameters out of the params map, returning {query_params, action_params}.
+        # Handles both atom and string keys since LLM tool calls may use either.
         defp split_query_params(params, keys) do
           Enum.reduce(keys, {%{}, params}, fn key, {query_acc, params_acc} ->
             string_key = to_string(key)
 
             cond do
+              # Atom key present (e.g., %{filter: ...}) — move to query params
               Map.has_key?(params_acc, key) ->
                 {Map.put(query_acc, key, Map.get(params_acc, key)), Map.delete(params_acc, key)}
 
+              # String key present (e.g., %{"filter" => ...}) — normalize to atom
+              # and move to query params
               Map.has_key?(params_acc, string_key) ->
                 {Map.put(query_acc, key, Map.get(params_acc, string_key)),
                  Map.delete(params_acc, string_key)}
 
+              # Key not present — leave both accumulators unchanged
               true ->
                 {query_acc, params_acc}
             end
@@ -311,6 +323,9 @@ defmodule AshJido.Generator do
 
         defp maybe_apply_filter(query, _), do: query
 
+        # Converts sort entries like [%{field: "name", direction: "desc"}] into
+        # Ash.Query.sort_input format: comma-separated string with "-" prefix for
+        # descending (e.g., "-name,price"). Skips entries with missing field.
         defp maybe_apply_sort(query, %{sort: sort}) when is_list(sort) and sort != [] do
           sort_entries =
             sort
@@ -325,9 +340,14 @@ defmodule AshJido.Generator do
                 direction =
                   if is_atom(direction), do: to_string(direction), else: direction || "asc"
 
+                # Ash.Sort.parse_sort prefix conventions:
+                # no prefix or "+" = asc, "-" = desc,
+                # "++" = asc_nils_first, "--" = desc_nils_last
                 prefix =
                   case direction do
-                    d when d in ["desc", "desc_nils_first", "desc_nils_last"] -> "-"
+                    "desc" -> "-"
+                    "desc_nils_last" -> "--"
+                    "asc_nils_first" -> "++"
                     _ -> ""
                   end
 
@@ -410,6 +430,12 @@ defmodule AshJido.Generator do
       raise ArgumentError,
             "AshJido: :load option is only supported for read actions. #{inspect(resource)}.#{ash_action.name} is a #{ash_action.type} action."
     end
+
+    if jido_action.action_parameters not in [[], [:filter, :sort, :limit, :offset]] and
+         ash_action.type != :read do
+      raise ArgumentError,
+            "AshJido: :action_parameters option is only supported for read actions. #{inspect(resource)}.#{ash_action.name} is a #{ash_action.type} action."
+    end
   end
 
   defp build_default_action_name(resource, ash_action) do
@@ -481,11 +507,16 @@ defmodule AshJido.Generator do
     end
   end
 
+  # Builds NimbleOptions schema entries for query parameters (filter, sort,
+  # limit, offset). Only includes params enabled via action_parameters config.
+  # Schema doc strings list public filterable/sortable attribute names to guide
+  # LLM tool usage.
   defp build_query_param_schema(_resource, jido_action, dsl_state) do
     enabled_params = jido_action.action_parameters
 
     all_attributes = Transformer.get_entities(dsl_state, [:attributes])
 
+    # Only public + filterable attributes are listed in filter docs
     filterable_names =
       all_attributes
       |> Enum.filter(fn attr ->
@@ -493,6 +524,7 @@ defmodule AshJido.Generator do
       end)
       |> Enum.map(& &1.name)
 
+    # Only public + sortable attributes are listed in sort docs
     sortable_names =
       all_attributes
       |> Enum.filter(fn attr ->
