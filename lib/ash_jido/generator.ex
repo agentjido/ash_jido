@@ -147,9 +147,18 @@ defmodule AshJido.Generator do
               :read ->
                 # Extract query parameters from params
                 {query_params, filter_params} =
-                  Map.split(params, ["sort", "limit", "offset", :sort, :limit, :offset])
+                  Map.split(params, [
+                    "sort",
+                    "limit",
+                    "offset",
+                    "filter",
+                    :sort,
+                    :limit,
+                    :offset,
+                    :filter
+                  ])
 
-                filter = params["filter"] || params[:filter]
+                filter = query_params["filter"] || query_params[:filter]
 
                 query =
                   @resource
@@ -396,7 +405,7 @@ defmodule AshJido.Generator do
 
       :destroy ->
         # Destroy actions just need an id
-        [id: [type: :string, required: false, doc: "ID of record to destroy"]]
+        [id: [type: :string, required: true, doc: "ID of record to destroy"]]
 
       :read ->
         # Read actions support query parameters for filtering, sorting, limiting
