@@ -160,7 +160,7 @@ defmodule AshJido.ErrorTest do
 
       result = Error.extract_field_errors(ash_error)
 
-      assert result.name == ["is too short", "is required"]
+      assert result.name == ["is required", "is too short"]
     end
 
     test "returns empty map for errors without field information" do

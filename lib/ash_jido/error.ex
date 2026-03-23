@@ -66,7 +66,7 @@ defmodule AshJido.Error do
   @spec extract_underlying_errors(Exception.t()) :: [Exception.t()]
   def extract_underlying_errors(ash_error) do
     cond do
-      Map.has_key?(ash_error, :errors) and is_list(ash_error.errors) ->
+      Map.has_key?(ash_error, :errors) and is_list(ash_error.errors) and ash_error.errors != [] ->
         ash_error.errors
 
       Map.has_key?(ash_error, :error) ->
