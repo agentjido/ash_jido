@@ -145,11 +145,22 @@ defmodule AshJido.Generator do
                 {action_result, signal_emission, false}
 
               :read ->
-                result =
+                # Extract query parameters from params
+                {query_params, filter_params} =
+                  Map.split(params, ["sort", "limit", "offset", :sort, :limit, :offset])
+
+                filter = params["filter"] || params[:filter]
+
+                query =
                   @resource
-                  |> Ash.Query.for_read(@ash_action, params, ash_opts)
+                  |> Ash.Query.for_read(@ash_action, filter_params, ash_opts)
+                  |> maybe_apply_filter(filter)
+                  |> maybe_apply_sort(query_params["sort"] || query_params[:sort])
+                  |> maybe_apply_limit(query_params["limit"] || query_params[:limit])
+                  |> maybe_apply_offset(query_params["offset"] || query_params[:offset])
                   |> maybe_load(@jido_config)
-                  |> Ash.read!(ash_opts)
+
+                result = Ash.read!(query, ash_opts)
 
                 # Ash.read! returns a raw list, not {:ok, result}
                 # Pass it directly to Mapper.wrap_result which will wrap it
@@ -385,12 +396,52 @@ defmodule AshJido.Generator do
 
       :destroy ->
         # Destroy actions just need an id
-        [id: [type: :string, required: true, doc: "ID of record to destroy"]]
+        [id: [type: :string, required: false, doc: "ID of record to destroy"]]
+
+      :read ->
+        # Read actions support query parameters for filtering, sorting, limiting
+        action_args = action_args_to_schema(ash_action.arguments || [])
+        query_params = read_query_parameters_schema(resource, ash_action, dsl_state)
+        action_args ++ query_params
 
       _ ->
-        # Read and custom actions use their declared arguments
+        # Custom actions use their declared arguments
         action_args_to_schema(ash_action.arguments || [])
     end
+  end
+
+  defp read_query_parameters_schema(resource, ash_action, dsl_state) do
+    # Get filterable attributes (all attributes can be used in filters)
+    all_attributes = Transformer.get_entities(dsl_state, [:attributes])
+
+    filterable_fields =
+      Enum.map(all_attributes, fn attr ->
+        {attr.name, attribute_to_nimble_options(attr)}
+      end)
+
+    [
+      filter: [
+        type: {:map, filterable_fields},
+        required: false,
+        doc: "Filter results by field values. Example: %{name: \"John\", status: \"active\"}"
+      ],
+      sort: [
+        type: {:list, :string},
+        required: false,
+        doc:
+          "Sort results by fields. Use '+' or '-' prefix for direction. Example: [\"-created_at\", \"name\"]"
+      ],
+      limit: [
+        type: :integer,
+        required: false,
+        doc: "Maximum number of records to return"
+      ],
+      offset: [
+        type: :integer,
+        required: false,
+        doc: "Number of records to skip (for pagination)"
+      ]
+    ]
   end
 
   defp accepted_attributes_to_schema(_resource, ash_action, dsl_state) do
@@ -459,4 +510,60 @@ defmodule AshJido.Generator do
 
   defp maybe_put_option(opts, _key, nil), do: opts
   defp maybe_put_option(opts, key, value), do: Keyword.put(opts, key, value)
+
+  # Query parameter helpers
+
+  defp maybe_apply_filter(query, nil), do: query
+
+  defp maybe_apply_filter(query, filter) when is_map(filter) do
+    Enum.reduce(filter, query, fn {field, value}, acc_query ->
+      Ash.Query.filter(acc_query, [{field, value}])
+    end)
+  end
+
+  defp maybe_apply_sort(query, nil), do: query
+
+  defp maybe_apply_sort(query, sort_specs) when is_list(sort_specs) do
+    Enum.reduce(sort_specs, query, fn spec, acc_query ->
+      case parse_sort_spec(spec) do
+        {field, direction} ->
+          Ash.Query.sort(acc_query, [{field, direction}])
+
+        _ ->
+          acc_query
+      end
+    end)
+  end
+
+  defp parse_sort_spec(spec) when is_binary(spec) do
+    cond do
+      String.starts_with?(spec, "+") ->
+        {String.slice(spec, 1..-1//1), :asc}
+
+      String.starts_with?(spec, "-") ->
+        {String.slice(spec, 1..-1//1), :desc}
+
+      true ->
+        {spec, :asc}
+    end
+  end
+
+  defp parse_sort_spec(spec) when is_atom(spec), do: {spec, :asc}
+  defp parse_sort_spec(_), do: nil
+
+  defp maybe_apply_limit(query, nil), do: query
+
+  defp maybe_apply_limit(query, limit) when is_integer(limit) and limit > 0 do
+    Ash.Query.limit(query, limit)
+  end
+
+  defp maybe_apply_limit(query, _), do: query
+
+  defp maybe_apply_offset(query, nil), do: query
+
+  defp maybe_apply_offset(query, offset) when is_integer(offset) and offset >= 0 do
+    Ash.Query.offset(query, offset)
+  end
+
+  defp maybe_apply_offset(query, _), do: query
 end
