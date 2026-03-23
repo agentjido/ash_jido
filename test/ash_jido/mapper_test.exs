@@ -111,10 +111,52 @@ defmodule AshJido.MapperTest do
       assert {:ok, []} = result
     end
 
-    test "handles nil data" do
+    test "wraps nil data in result map" do
       result = Mapper.wrap_result({:ok, nil}, %{output_map?: true})
 
-      assert {:ok, nil} = result
+      assert {:ok, %{result: nil}} = result
+    end
+
+    test "wraps string result in map" do
+      result = Mapper.wrap_result({:ok, "hello"}, %{output_map?: true})
+
+      assert {:ok, %{result: "hello"}} = result
+    end
+
+    test "wraps integer result in map" do
+      result = Mapper.wrap_result({:ok, 42}, %{output_map?: true})
+
+      assert {:ok, %{result: 42}} = result
+    end
+
+    test "wraps boolean result in map" do
+      result = Mapper.wrap_result({:ok, true}, %{output_map?: true})
+
+      assert {:ok, %{result: true}} = result
+    end
+
+    test "wraps atom result in map" do
+      result = Mapper.wrap_result({:ok, :custom_atom}, %{output_map?: true})
+
+      assert {:ok, %{result: :custom_atom}} = result
+    end
+
+    test "wraps raw string (from Ash generic action) in map" do
+      result = Mapper.wrap_result("raw string", %{output_map?: true})
+
+      assert {:ok, %{result: "raw string"}} = result
+    end
+
+    test "wraps raw integer in map" do
+      result = Mapper.wrap_result(123, %{output_map?: true})
+
+      assert {:ok, %{result: 123}} = result
+    end
+
+    test "passes map results through unchanged" do
+      result = Mapper.wrap_result({:ok, %{key: "value"}}, %{output_map?: true})
+
+      assert {:ok, %{key: "value"}} = result
     end
 
     test "converts exception with fallback when Jido.Error not available" do

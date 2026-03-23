@@ -64,7 +64,12 @@ defmodule AshJido.Mapper do
   end
 
   defp maybe_convert_to_maps(data, %{output_map?: false}), do: data
-  defp maybe_convert_to_maps(data, _config), do: convert_to_maps(data)
+
+  defp maybe_convert_to_maps(data, _config) do
+    data
+    |> convert_to_maps()
+    |> ensure_map_output()
+  end
 
   defp convert_to_maps(data) when is_list(data) do
     Enum.map(data, &convert_to_maps/1)
@@ -78,6 +83,7 @@ defmodule AshJido.Mapper do
     end
   end
 
+  # Pass through maps and primitives unchanged during recursive conversion
   defp convert_to_maps(data), do: data
 
   defp is_ash_resource?(struct) do
@@ -90,4 +96,10 @@ defmodule AshJido.Mapper do
     |> Map.drop(@ash_meta_keys)
     |> Enum.into(%{}, fn {k, v} -> {k, convert_to_maps(v)} end)
   end
+
+  # Ensures the final output is a map to satisfy Jido.Exec validation
+  # Maps (including structs) and lists pass through, but primitives get wrapped
+  defp ensure_map_output(data) when is_map(data), do: data
+  defp ensure_map_output(data) when is_list(data), do: data
+  defp ensure_map_output(data), do: %{result: data}
 end
