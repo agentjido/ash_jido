@@ -119,7 +119,7 @@ defmodule AshJido.TelemetryTest do
 
       result = ResourceWithTelemetry.Jido.Explode.run(%{}, %{domain: Domain})
 
-      assert {:error, %Jido.Action.Error.ExecutionFailureError{}} = result
+      assert {:error, %Jido.Action.Error.InternalError{}} = result
 
       assert_receive {:telemetry_event, [:jido, :action, :ash_jido, :start], _start, start_meta}
       assert start_meta.generated_module == ResourceWithTelemetry.Jido.Explode
