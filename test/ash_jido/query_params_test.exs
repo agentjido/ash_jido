@@ -22,7 +22,7 @@ defmodule AshJido.QueryParamsTest do
     test "query param schema entries have correct types" do
       schema = AshJido.Test.User.Jido.Read.schema()
 
-      assert schema[:filter][:type] == :map
+      assert schema[:filter][:type] == :any
       assert schema[:limit][:type] == :pos_integer
       assert schema[:offset][:type] == :non_neg_integer
     end
@@ -99,6 +99,23 @@ defmodule AshJido.QueryParamsTest do
     end
   end
 
+  describe "validation: string keys" do
+    test "query param keys are normalized before validation" do
+      assert {:ok, validated} =
+               AshJido.Test.User.Jido.Read.validate_params(%{
+                 "filter" => %{"name" => "Alice"},
+                 "limit" => 1,
+                 "offset" => 0
+               })
+
+      assert validated == %{
+               filter: %{"name" => "Alice"},
+               limit: 1,
+               offset: 0
+             }
+    end
+  end
+
   describe "runtime: filter" do
     setup :create_test_users
 
@@ -172,6 +189,17 @@ defmodule AshJido.QueryParamsTest do
       ages = Enum.map(result, & &1[:age])
       assert ages == [35, 30, 25]
     end
+
+    test "sorts using JSON-style sort entries", %{users: _users} do
+      {:ok, result} =
+        AshJido.Test.User.Jido.Read.run(
+          %{sort: [%{"field" => "age", "direction" => "desc"}]},
+          %{domain: AshJido.Test.Domain}
+        )
+
+      ages = Enum.map(result, & &1[:age])
+      assert ages == [35, 30, 25]
+    end
   end
 
   describe "runtime: limit and offset" do
@@ -238,6 +266,32 @@ defmodule AshJido.QueryParamsTest do
 
       # Should return all 3 users
       assert length(result) == 3
+    end
+  end
+
+  describe "runtime: string keys" do
+    setup :create_test_users
+
+    test "extracts string-keyed filter and limit params", %{users: _users} do
+      {:ok, result} =
+        AshJido.Test.User.Jido.Read.run(
+          %{"filter" => %{"name" => "Alice"}, "limit" => 1},
+          %{domain: AshJido.Test.Domain}
+        )
+
+      assert length(result) == 1
+      assert hd(result)[:name] == "Alice"
+    end
+
+    test "extracts string-keyed sort params", %{users: _users} do
+      {:ok, result} =
+        AshJido.Test.User.Jido.Read.run(
+          %{"sort" => [%{"field" => "age", "direction" => "desc"}]},
+          %{domain: AshJido.Test.Domain}
+        )
+
+      ages = Enum.map(result, & &1[:age])
+      assert ages == [35, 30, 25]
     end
   end
 

@@ -90,6 +90,10 @@ defmodule AshJido.Generator do
         @ash_action_type unquote(ash_action.type)
         @jido_config unquote(Macro.escape(jido_action))
 
+        def on_before_validate_params(params) do
+          {:ok, normalize_query_param_keys(params)}
+        end
+
         def run(params, context) do
           ash_opts = AshJido.Context.extract_ash_opts!(context, @resource, @ash_action)
           telemetry_meta = telemetry_metadata(ash_opts, @jido_config)
@@ -146,7 +150,10 @@ defmodule AshJido.Generator do
 
               :read ->
                 # Split query params from action arguments
-                {query_opts, action_params} = split_query_params(params, @jido_config)
+                {query_opts, action_params} =
+                  params
+                  |> normalize_query_param_keys()
+                  |> split_query_params(@jido_config)
 
                 # Build query: apply action args, then static load, then dynamic query opts
                 query =
@@ -281,6 +288,34 @@ defmodule AshJido.Generator do
         end
 
         @query_param_keys [:filter, :sort, :limit, :offset, :load]
+        @valid_sort_directions [
+          :asc,
+          :desc,
+          :asc_nils_first,
+          :asc_nils_last,
+          :desc_nils_first,
+          :desc_nils_last
+        ]
+        @sort_directions_by_name Map.new(@valid_sort_directions, &{Atom.to_string(&1), &1})
+
+        defp normalize_query_param_keys(params) do
+          Enum.reduce(@query_param_keys, params, fn key, acc ->
+            string_key = to_string(key)
+
+            cond do
+              Map.has_key?(acc, key) and Map.has_key?(acc, string_key) ->
+                Map.delete(acc, string_key)
+
+              Map.has_key?(acc, string_key) ->
+                acc
+                |> Map.put(key, Map.get(acc, string_key))
+                |> Map.delete(string_key)
+
+              true ->
+                acc
+            end
+          end)
+        end
 
         defp split_query_params(params, jido_config) do
           if jido_config.query_params? do
@@ -289,11 +324,12 @@ defmodule AshJido.Generator do
             query_opts =
               query_opts_map
               |> Enum.reject(fn {_k, v} -> is_nil(v) end)
+              |> Map.new()
               |> enforce_max_page_size(jido_config)
 
             {query_opts, action_params}
           else
-            {[], params}
+            {%{}, params}
           end
         end
 
@@ -303,9 +339,9 @@ defmodule AshJido.Generator do
               query_opts
 
             max when is_integer(max) ->
-              case Keyword.get(query_opts, :limit) do
+              case Map.get(query_opts, :limit) do
                 limit when is_integer(limit) and limit > max ->
-                  Keyword.put(query_opts, :limit, max)
+                  Map.put(query_opts, :limit, max)
 
                 _ ->
                   query_opts
@@ -313,17 +349,65 @@ defmodule AshJido.Generator do
           end
         end
 
-        defp apply_query_opts(query, []), do: query
+        defp apply_query_opts(query, query_opts) when map_size(query_opts) == 0, do: query
 
         defp apply_query_opts(query, query_opts) do
           Enum.reduce(query_opts, query, fn
             {:filter, filter_map}, q -> Ash.Query.filter_input(q, filter_map)
-            {:sort, sort_val}, q -> Ash.Query.sort_input(q, sort_val)
+            {:sort, sort_val}, q -> Ash.Query.sort_input(q, normalize_sort_input(sort_val))
             {:limit, limit}, q -> Ash.Query.limit(q, limit)
             {:offset, offset}, q -> Ash.Query.offset(q, offset)
             {:load, load}, q -> Ash.Query.load(q, load)
+            _, q -> q
           end)
         end
+
+        defp normalize_sort_input(sort) when is_list(sort) do
+          cond do
+            Keyword.keyword?(sort) ->
+              sort
+
+            true ->
+              Enum.flat_map(sort, fn
+                %{} = entry ->
+                  case Map.get(entry, :field) || Map.get(entry, "field") do
+                    nil ->
+                      []
+
+                    field ->
+                      direction =
+                        entry
+                        |> Map.get(:direction)
+                        |> case do
+                          nil -> Map.get(entry, "direction")
+                          value -> value
+                        end
+                        |> normalize_sort_direction()
+
+                      [{field, direction}]
+                  end
+
+                {field, direction} ->
+                  [{field, normalize_sort_direction(direction)}]
+
+                entry when is_binary(entry) or is_atom(entry) ->
+                  [entry]
+
+                _ ->
+                  []
+              end)
+          end
+        end
+
+        defp normalize_sort_input(sort), do: sort
+
+        defp normalize_sort_direction(direction) when direction in @valid_sort_directions,
+          do: direction
+
+        defp normalize_sort_direction(direction) when is_binary(direction),
+          do: Map.get(@sort_directions_by_name, direction, :asc)
+
+        defp normalize_sort_direction(_), do: :asc
 
         defp maybe_add_notification_collection(ash_opts, config, action_type) do
           if action_type in [:create, :update, :destroy] and config.emit_signals? do
@@ -460,7 +544,7 @@ defmodule AshJido.Generator do
 
     [
       filter: [
-        type: :map,
+        type: :any,
         required: false,
         doc:
           "Filter results using Ash's filter input syntax. " <>
@@ -473,7 +557,8 @@ defmodule AshJido.Generator do
         type: :any,
         required: false,
         doc:
-          "Sort results. Keyword list: [name: :asc, age: :desc]. " <>
+          "Sort results. JSON list: [%{\"field\" => \"name\", \"direction\" => \"asc\"}]. " <>
+            "Keyword list: [name: :asc, age: :desc]. " <>
             "String: \"name,-age\" (minus prefix = descending)."
       ],
       limit: [

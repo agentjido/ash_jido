@@ -83,7 +83,7 @@ Generated Jido read actions include optional query parameters for filtering, sor
 **Available Parameters:**
 
 - `filter` (map) — Filter using Ash's filter input syntax: `%{name: "fred"}`, `%{age: %{greater_than: 25}}`
-- `sort` (any) — Sort via keyword list `[name: :asc]` or string `"name,-age"`
+- `sort` (any) — Sort via JSON-style entries `[%{"field" => "name", "direction" => "asc"}]`, keyword list `[name: :asc]`, or string `"name,-age"`
 - `limit` (pos_integer) — Maximum results to return
 - `offset` (non_neg_integer) — Results to skip (for pagination)
 - `load` (any) — Relationships to load: `:author`, `[:author, :comments]`, `[author: [:profile]]`

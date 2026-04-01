@@ -531,9 +531,15 @@ Use the `filter` parameter to query records using Ash's filter input syntax:
 
 ### Sorting
 
-Use the `sort` parameter to order results. You can specify sorting as a keyword list or a string:
+Use the `sort` parameter to order results. You can specify sorting as JSON-style entries, a keyword list, or a string:
 
 ```elixir
+# JSON-style entries (tool-call friendly)
+{:ok, users} = MyApp.Blog.Post.Jido.Read.run(
+  %{sort: [%{"field" => "created_at", "direction" => "desc"}]},
+  %{domain: MyApp.Blog}
+)
+
 # Keyword list syntax
 {:ok, users} = MyApp.Blog.Post.Jido.Read.run(
   %{sort: [created_at: :desc, title: :asc]},
