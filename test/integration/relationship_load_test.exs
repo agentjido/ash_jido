@@ -112,7 +112,7 @@ defmodule AshJido.RelationshipLoadTest do
           %{domain: Domain}
         )
 
-      {:ok, articles} = ArticleWithActionLoad.Jido.Read.run(%{}, %{domain: Domain})
+      {:ok, %{result: articles}} = ArticleWithActionLoad.Jido.Read.run(%{}, %{domain: Domain})
       article = Enum.find(articles, &(&1[:title] == "Action Load"))
 
       assert is_map(article)
@@ -132,7 +132,9 @@ defmodule AshJido.RelationshipLoadTest do
           %{domain: Domain}
         )
 
-      {:ok, articles} = ArticleWithAllActionsReadLoad.Jido.Read.run(%{}, %{domain: Domain})
+      {:ok, %{result: articles}} =
+        ArticleWithAllActionsReadLoad.Jido.Read.run(%{}, %{domain: Domain})
+
       article = Enum.find(articles, &(&1[:title] == "All Actions Load"))
 
       assert is_map(article)

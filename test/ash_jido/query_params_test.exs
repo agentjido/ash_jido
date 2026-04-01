@@ -120,7 +120,7 @@ defmodule AshJido.QueryParamsTest do
     setup :create_test_users
 
     test "filters by exact equality", %{users: _users} do
-      {:ok, result} =
+      {:ok, %{result: result}} =
         AshJido.Test.User.Jido.Read.run(
           %{filter: %{name: "Alice"}},
           %{domain: AshJido.Test.Domain}
@@ -131,7 +131,7 @@ defmodule AshJido.QueryParamsTest do
     end
 
     test "filters with greater_than operator", %{users: _users} do
-      {:ok, result} =
+      {:ok, %{result: result}} =
         AshJido.Test.User.Jido.Read.run(
           %{filter: %{age: %{greater_than: 28}}},
           %{domain: AshJido.Test.Domain}
@@ -144,7 +144,7 @@ defmodule AshJido.QueryParamsTest do
     end
 
     test "filters with in operator", %{users: _users} do
-      {:ok, result} =
+      {:ok, %{result: result}} =
         AshJido.Test.User.Jido.Read.run(
           %{filter: %{name: %{in: ["Alice", "Bob"]}}},
           %{domain: AshJido.Test.Domain}
@@ -154,7 +154,7 @@ defmodule AshJido.QueryParamsTest do
     end
 
     test "filters with multiple conditions (AND)", %{users: _users} do
-      {:ok, result} =
+      {:ok, %{result: result}} =
         AshJido.Test.User.Jido.Read.run(
           %{filter: %{active: true, age: %{greater_than: 28}}},
           %{domain: AshJido.Test.Domain}
@@ -169,7 +169,7 @@ defmodule AshJido.QueryParamsTest do
     setup :create_test_users
 
     test "sorts ascending", %{users: _users} do
-      {:ok, result} =
+      {:ok, %{result: result}} =
         AshJido.Test.User.Jido.Read.run(
           %{sort: [age: :asc]},
           %{domain: AshJido.Test.Domain}
@@ -180,7 +180,7 @@ defmodule AshJido.QueryParamsTest do
     end
 
     test "sorts descending", %{users: _users} do
-      {:ok, result} =
+      {:ok, %{result: result}} =
         AshJido.Test.User.Jido.Read.run(
           %{sort: [age: :desc]},
           %{domain: AshJido.Test.Domain}
@@ -191,7 +191,7 @@ defmodule AshJido.QueryParamsTest do
     end
 
     test "sorts using JSON-style sort entries", %{users: _users} do
-      {:ok, result} =
+      {:ok, %{result: result}} =
         AshJido.Test.User.Jido.Read.run(
           %{sort: [%{"field" => "age", "direction" => "desc"}]},
           %{domain: AshJido.Test.Domain}
@@ -206,7 +206,7 @@ defmodule AshJido.QueryParamsTest do
     setup :create_test_users
 
     test "limits results", %{users: _users} do
-      {:ok, result} =
+      {:ok, %{result: result}} =
         AshJido.Test.User.Jido.Read.run(
           %{sort: [age: :asc], limit: 2},
           %{domain: AshJido.Test.Domain}
@@ -216,7 +216,7 @@ defmodule AshJido.QueryParamsTest do
     end
 
     test "offsets results", %{users: _users} do
-      {:ok, result} =
+      {:ok, %{result: result}} =
         AshJido.Test.User.Jido.Read.run(
           %{sort: [age: :asc], offset: 1},
           %{domain: AshJido.Test.Domain}
@@ -227,7 +227,7 @@ defmodule AshJido.QueryParamsTest do
     end
 
     test "combines limit and offset", %{users: _users} do
-      {:ok, result} =
+      {:ok, %{result: result}} =
         AshJido.Test.User.Jido.Read.run(
           %{sort: [age: :asc], limit: 1, offset: 1},
           %{domain: AshJido.Test.Domain}
@@ -242,7 +242,7 @@ defmodule AshJido.QueryParamsTest do
     setup :create_test_users
 
     test "filter + sort + limit", %{users: _users} do
-      {:ok, result} =
+      {:ok, %{result: result}} =
         AshJido.Test.User.Jido.Read.run(
           %{filter: %{active: true}, sort: [age: :desc], limit: 2},
           %{domain: AshJido.Test.Domain}
@@ -258,7 +258,7 @@ defmodule AshJido.QueryParamsTest do
     setup :create_test_users
 
     test "works normally without query params", %{users: _users} do
-      {:ok, result} =
+      {:ok, %{result: result}} =
         AshJido.Test.User.Jido.Read.run(
           %{},
           %{domain: AshJido.Test.Domain}
@@ -273,7 +273,7 @@ defmodule AshJido.QueryParamsTest do
     setup :create_test_users
 
     test "extracts string-keyed filter and limit params", %{users: _users} do
-      {:ok, result} =
+      {:ok, %{result: result}} =
         AshJido.Test.User.Jido.Read.run(
           %{"filter" => %{"name" => "Alice"}, "limit" => 1},
           %{domain: AshJido.Test.Domain}
@@ -284,7 +284,7 @@ defmodule AshJido.QueryParamsTest do
     end
 
     test "extracts string-keyed sort params", %{users: _users} do
-      {:ok, result} =
+      {:ok, %{result: result}} =
         AshJido.Test.User.Jido.Read.run(
           %{"sort" => [%{"field" => "age", "direction" => "desc"}]},
           %{domain: AshJido.Test.Domain}
@@ -319,7 +319,7 @@ defmodule AshJido.QueryParamsTest do
         )
 
       # Request limit: 100, but max_page_size is 2
-      {:ok, result} =
+      {:ok, %{result: result}} =
         module_name.run(
           %{sort: [age: :asc], limit: 100},
           %{domain: AshJido.Test.Domain}
@@ -349,7 +349,7 @@ defmodule AshJido.QueryParamsTest do
         )
 
       # Request limit: 2, which is within max_page_size 10
-      {:ok, result} =
+      {:ok, %{result: result}} =
         module_name.run(
           %{sort: [age: :asc], limit: 2},
           %{domain: AshJido.Test.Domain}

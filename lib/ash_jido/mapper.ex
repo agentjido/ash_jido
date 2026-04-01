@@ -63,7 +63,7 @@ defmodule AshJido.Mapper do
     end
   end
 
-  defp maybe_convert_to_maps(data, %{output_map?: false}), do: data
+  defp maybe_convert_to_maps(data, %{output_map?: false}), do: ensure_map_output(data)
 
   defp maybe_convert_to_maps(data, _config) do
     data
@@ -97,9 +97,9 @@ defmodule AshJido.Mapper do
     |> Enum.into(%{}, fn {k, v} -> {k, convert_to_maps(v)} end)
   end
 
-  # Ensures the final output is a map to satisfy Jido.Exec validation
-  # Maps (including structs) and lists pass through, but primitives get wrapped
+  # Ensures the final output is a map to satisfy Jido.Exec output validation.
+  # Maps (including structs) pass through; all other values (lists, scalars,
+  # nil) are wrapped in %{result: value}.
   defp ensure_map_output(data) when is_map(data), do: data
-  defp ensure_map_output(data) when is_list(data), do: data
   defp ensure_map_output(data), do: %{result: data}
 end

@@ -17,7 +17,7 @@ defmodule AshJido.MapperTest do
       assert {:ok, %{id: "123", name: "John", email: "john@example.com", age: 30}} = result
     end
 
-    test "converts list of resources to list of maps" do
+    test "wraps list of resources in result map" do
       users = [
         %User{id: "1", name: "Alice", email: "alice@example.com", age: 25},
         %User{id: "2", name: "Bob", email: "bob@example.com", age: 35}
@@ -25,11 +25,8 @@ defmodule AshJido.MapperTest do
 
       result = Mapper.wrap_result({:ok, users}, %{output_map?: true})
 
-      assert {:ok,
-              [
-                %{id: "1", name: "Alice", email: "alice@example.com", age: 25},
-                %{id: "2", name: "Bob", email: "bob@example.com", age: 35}
-              ]} = result
+      assert {:ok, %{result: converted_users}} = result
+      assert [%{id: "1", name: "Alice"}, %{id: "2", name: "Bob"}] = converted_users
     end
 
     test "skips conversion when output_map? false" do
@@ -48,14 +45,14 @@ defmodule AshJido.MapperTest do
       assert {:ok, %{id: "456", name: "Jane", email: "jane@example.com", age: 28}} = result
     end
 
-    test "handles raw list without tuple wrapper" do
+    test "wraps raw list in result map" do
       users = [
         %User{id: "1", name: "Alice", email: "alice@example.com", age: 25}
       ]
 
       result = Mapper.wrap_result(users, %{output_map?: true})
 
-      assert {:ok, [%{id: "1", name: "Alice", email: "alice@example.com", age: 25}]} = result
+      assert {:ok, %{result: [%{id: "1", name: "Alice"}]}} = result
     end
 
     test "propagates non-exception errors unchanged" do
@@ -105,10 +102,10 @@ defmodule AshJido.MapperTest do
       assert {:ok, %{id: "123", name: "John", email: "john@example.com", age: 30}} = result
     end
 
-    test "handles empty list" do
+    test "wraps empty list in result map" do
       result = Mapper.wrap_result({:ok, []}, %{output_map?: true})
 
-      assert {:ok, []} = result
+      assert {:ok, %{result: []}} = result
     end
 
     test "wraps nil data in result map" do

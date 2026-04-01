@@ -200,7 +200,7 @@ defmodule AshJido.GuideExamplesTest do
           %{domain: Domain}
         )
 
-      {:ok, posts} = Post.Jido.Read.run(%{}, %{domain: Domain})
+      {:ok, %{result: posts}} = Post.Jido.Read.run(%{}, %{domain: Domain})
       loaded_post = Enum.find(posts, &(&1[:id] == post[:id]))
 
       assert loaded_post[:author][:id] == author.id
