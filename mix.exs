@@ -63,7 +63,7 @@ defmodule AshJido.MixProject do
       {:jido, "~> 2.1"},
       {:jido_action, "~> 2.1"},
       {:jido_signal, "~> 2.0"},
-      {:libgraph, "~> 0.16.0", override: true},
+      {:libgraph, "~> 0.16.1-mg.1", hex: :multigraph, override: true},
       {:splode, "~> 0.3"},
       {:zoi, "~> 0.17"},
 
