@@ -10,12 +10,14 @@ defmodule AshJido.Resource.AllActions do
     :tags,
     :vsn,
     :read_load,
+    :read_max_page_size,
     :signal_dispatch,
     :signal_type,
     :signal_source,
     :__spark_metadata__,
     emit_signals?: false,
-    telemetry?: false
+    telemetry?: false,
+    read_query_params?: true
   ]
 
   @type t :: %__MODULE__{
@@ -25,10 +27,12 @@ defmodule AshJido.Resource.AllActions do
           tags: [String.t()] | nil,
           vsn: String.t() | nil,
           read_load: term() | nil,
+          read_max_page_size: pos_integer() | nil,
           signal_dispatch: term() | nil,
           signal_type: String.t() | nil,
           signal_source: String.t() | nil,
           emit_signals?: boolean(),
-          telemetry?: boolean()
+          telemetry?: boolean(),
+          read_query_params?: boolean()
         }
 end

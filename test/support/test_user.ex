@@ -14,10 +14,10 @@ defmodule AshJido.Test.User do
 
   attributes do
     uuid_primary_key(:id)
-    attribute(:name, :string, allow_nil?: false)
-    attribute(:email, :string, allow_nil?: false)
-    attribute(:age, :integer)
-    attribute(:active, :boolean, default: true)
+    attribute(:name, :string, allow_nil?: false, public?: true)
+    attribute(:email, :string, allow_nil?: false, public?: true)
+    attribute(:age, :integer, public?: true)
+    attribute(:active, :boolean, default: true, public?: true)
     timestamps()
   end
 

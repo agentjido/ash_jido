@@ -63,7 +63,7 @@ defmodule AshJido.Generator do
     vsn = jido_action.vsn
 
     # Build input schema including accepted attributes
-    schema = build_parameter_schema(resource, ash_action, dsl_state)
+    schema = build_parameter_schema(resource, ash_action, jido_action, dsl_state)
 
     action_use_opts =
       [
@@ -89,6 +89,10 @@ defmodule AshJido.Generator do
         @ash_action unquote(ash_action.name)
         @ash_action_type unquote(ash_action.type)
         @jido_config unquote(Macro.escape(jido_action))
+
+        def on_before_validate_params(params) do
+          {:ok, normalize_query_param_keys(params)}
+        end
 
         def run(params, context) do
           ash_opts = AshJido.Context.extract_ash_opts!(context, @resource, @ash_action)
@@ -145,11 +149,20 @@ defmodule AshJido.Generator do
                 {action_result, signal_emission, false}
 
               :read ->
-                result =
+                # Split query params from action arguments
+                {query_opts, action_params} =
+                  params
+                  |> normalize_query_param_keys()
+                  |> split_query_params(@jido_config)
+
+                # Build query: apply action args, then static load, then dynamic query opts
+                query =
                   @resource
-                  |> Ash.Query.for_read(@ash_action, params, ash_opts)
+                  |> Ash.Query.for_read(@ash_action, action_params, ash_opts)
                   |> maybe_load(@jido_config)
-                  |> Ash.read!(ash_opts)
+                  |> apply_query_opts(query_opts)
+
+                result = Ash.read!(query, ash_opts)
 
                 # Ash.read! returns a raw list, not {:ok, result}
                 # Pass it directly to Mapper.wrap_result which will wrap it
@@ -274,6 +287,128 @@ defmodule AshJido.Generator do
           end
         end
 
+        @query_param_keys [:filter, :sort, :limit, :offset, :load]
+        @valid_sort_directions [
+          :asc,
+          :desc,
+          :asc_nils_first,
+          :asc_nils_last,
+          :desc_nils_first,
+          :desc_nils_last
+        ]
+        @sort_directions_by_name Map.new(@valid_sort_directions, &{Atom.to_string(&1), &1})
+
+        defp normalize_query_param_keys(params) do
+          Enum.reduce(@query_param_keys, params, fn key, acc ->
+            string_key = to_string(key)
+
+            cond do
+              Map.has_key?(acc, key) and Map.has_key?(acc, string_key) ->
+                Map.delete(acc, string_key)
+
+              Map.has_key?(acc, string_key) ->
+                acc
+                |> Map.put(key, Map.get(acc, string_key))
+                |> Map.delete(string_key)
+
+              true ->
+                acc
+            end
+          end)
+        end
+
+        defp split_query_params(params, jido_config) do
+          if jido_config.query_params? do
+            {query_opts_map, action_params} = Map.split(params, @query_param_keys)
+
+            query_opts =
+              query_opts_map
+              |> Enum.reject(fn {_k, v} -> is_nil(v) end)
+              |> Map.new()
+              |> enforce_max_page_size(jido_config)
+
+            {query_opts, action_params}
+          else
+            {%{}, params}
+          end
+        end
+
+        defp enforce_max_page_size(query_opts, jido_config) do
+          case jido_config.max_page_size do
+            nil ->
+              query_opts
+
+            max when is_integer(max) ->
+              case Map.get(query_opts, :limit) do
+                limit when is_integer(limit) and limit > max ->
+                  Map.put(query_opts, :limit, max)
+
+                _ ->
+                  query_opts
+              end
+          end
+        end
+
+        defp apply_query_opts(query, query_opts) when map_size(query_opts) == 0, do: query
+
+        defp apply_query_opts(query, query_opts) do
+          Enum.reduce(query_opts, query, fn
+            {:filter, filter_map}, q -> Ash.Query.filter_input(q, filter_map)
+            {:sort, sort_val}, q -> Ash.Query.sort_input(q, normalize_sort_input(sort_val))
+            {:limit, limit}, q -> Ash.Query.limit(q, limit)
+            {:offset, offset}, q -> Ash.Query.offset(q, offset)
+            {:load, load}, q -> Ash.Query.load(q, load)
+            _, q -> q
+          end)
+        end
+
+        defp normalize_sort_input(sort) when is_list(sort) do
+          cond do
+            Keyword.keyword?(sort) ->
+              sort
+
+            true ->
+              Enum.flat_map(sort, fn
+                %{} = entry ->
+                  case Map.get(entry, :field) || Map.get(entry, "field") do
+                    nil ->
+                      []
+
+                    field ->
+                      direction =
+                        entry
+                        |> Map.get(:direction)
+                        |> case do
+                          nil -> Map.get(entry, "direction")
+                          value -> value
+                        end
+                        |> normalize_sort_direction()
+
+                      [{field, direction}]
+                  end
+
+                {field, direction} ->
+                  [{field, normalize_sort_direction(direction)}]
+
+                entry when is_binary(entry) or is_atom(entry) ->
+                  [entry]
+
+                _ ->
+                  []
+              end)
+          end
+        end
+
+        defp normalize_sort_input(sort), do: sort
+
+        defp normalize_sort_direction(direction) when direction in @valid_sort_directions,
+          do: direction
+
+        defp normalize_sort_direction(direction) when is_binary(direction),
+          do: Map.get(@sort_directions_by_name, direction, :asc)
+
+        defp normalize_sort_direction(_), do: :asc
+
         defp maybe_add_notification_collection(ash_opts, config, action_type) do
           if action_type in [:create, :update, :destroy] and config.emit_signals? do
             Keyword.put(ash_opts, :return_notifications?, true)
@@ -368,7 +503,7 @@ defmodule AshJido.Generator do
     end
   end
 
-  defp build_parameter_schema(resource, ash_action, dsl_state) do
+  defp build_parameter_schema(resource, ash_action, jido_action, dsl_state) do
     case ash_action.type do
       :create ->
         # Create actions use accepted attributes plus action arguments
@@ -389,8 +524,62 @@ defmodule AshJido.Generator do
 
       _ ->
         # Read and custom actions use their declared arguments
-        action_args_to_schema(ash_action.arguments || [])
+        base_schema = action_args_to_schema(ash_action.arguments || [])
+
+        if ash_action.type == :read and jido_action.query_params? do
+          base_schema ++ build_query_params_schema(jido_action)
+        else
+          base_schema
+        end
     end
+  end
+
+  defp build_query_params_schema(jido_action) do
+    max_page_doc =
+      if jido_action.max_page_size do
+        " Maximum: #{jido_action.max_page_size}."
+      else
+        ""
+      end
+
+    [
+      filter: [
+        type: :any,
+        required: false,
+        doc:
+          "Filter results using Ash's filter input syntax. " <>
+            "Simple equality: %{\"name\" => \"fred\"}. " <>
+            "Operators: %{\"age\" => %{\"greater_than\" => 25}}. " <>
+            "In: %{\"status\" => %{\"in\" => [\"active\", \"pending\"]}}. " <>
+            "Only public attributes are accessible."
+      ],
+      sort: [
+        type: :any,
+        required: false,
+        doc:
+          "Sort results. JSON list: [%{\"field\" => \"name\", \"direction\" => \"asc\"}]. " <>
+            "Keyword list: [name: :asc, age: :desc]. " <>
+            "String: \"name,-age\" (minus prefix = descending)."
+      ],
+      limit: [
+        type: :pos_integer,
+        required: false,
+        doc: "Maximum number of results to return.#{max_page_doc}"
+      ],
+      offset: [
+        type: :non_neg_integer,
+        required: false,
+        doc: "Number of results to skip."
+      ],
+      load: [
+        type: :any,
+        required: false,
+        doc:
+          "Relationships/calculations to load. " <>
+            "Examples: :author, [:author, :comments], [author: [:profile]]. " <>
+            "Merged with any static load configured on the action."
+      ]
+    ]
   end
 
   defp accepted_attributes_to_schema(_resource, ash_action, dsl_state) do

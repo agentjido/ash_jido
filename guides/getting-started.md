@@ -193,6 +193,8 @@ Each action in the `jido` section supports these options:
 | `vsn` | `string` | `nil` | Optional semantic version metadata |
 | `output_map?` | `boolean` | `true` | Convert output structs to maps |
 | `load` | `term` | `nil` | Static `Ash.Query.load/2` statement for read actions |
+| `query_params?` | `boolean` | `true` | Enable query parameters (filter, sort, limit, offset, load) for read actions |
+| `max_page_size` | `pos_integer` | `nil` | Maximum limit value for read actions (clamps the limit parameter) |
 | `emit_signals?` | `boolean` | `false` | Emit Jido signals from Ash notifications (create/update/destroy) |
 | `signal_dispatch` | `term` | `nil` | Default signal dispatch config (overridable via context) |
 | `signal_type` | `string` | derived | Override emitted signal type |
@@ -202,6 +204,8 @@ Each action in the `jido` section supports these options:
 `all_actions` additionally supports:
 
 - `read_load` for static read relationship loading
+- `read_query_params?` to enable/disable query parameters for read actions
+- `read_max_page_size` to set maximum page size for read actions
 - `category` (default `ash.<action_type>`)
 - `tags`
 - `vsn`
@@ -480,6 +484,170 @@ alias MyApp.Blog.Post
   %{domain: MyApp.Blog}
 )
 ```
+
+## Querying and Filtering
+
+Generated Jido read actions support query parameters for filtering, sorting, pagination, and relationship loading. These parameters are optional and provide powerful querying capabilities while respecting Ash's authorization policies.
+
+### Filter Syntax
+
+Use the `filter` parameter to query records using Ash's filter input syntax:
+
+```elixir
+# Simple equality filter
+{:ok, users} = MyApp.Accounts.User.Jido.Read.run(
+  %{filter: %{name: "John Doe"}},
+  %{domain: MyApp.Accounts}
+)
+
+# Filter with operators
+{:ok, adults} = MyApp.Accounts.User.Jido.Read.run(
+  %{filter: %{age: %{greater_than: 18}}},
+  %{domain: MyApp.Accounts}
+)
+
+# Multiple conditions (all must match)
+{:ok, active_admins} = MyApp.Accounts.User.Jido.Read.run(
+  %{filter: %{status: "active", role: "admin"}},
+  %{domain: MyApp.Accounts}
+)
+
+# IN operator for multiple values
+{:ok, users} = MyApp.Accounts.User.Jido.Read.run(
+  %{filter: %{status: %{in: ["active", "pending"]}}},
+  %{domain: MyApp.Accounts}
+)
+```
+
+**Common Filter Operators:**
+
+- `%{field: value}` — Equality
+- `%{field: %{greater_than: value}}` — Greater than
+- `%{field: %{less_than: value}}` — Less than
+- `%{field: %{greater_than_or_equal: value}}` — Greater than or equal
+- `%{field: %{less_than_or_equal: value}}` — Less than or equal
+- `%{field: %{in: [value1, value2]}}` — Match any value in list
+- `%{field: %{contains: "substring"}}` — String contains (case-sensitive)
+
+### Sorting
+
+Use the `sort` parameter to order results. You can specify sorting as JSON-style entries, a keyword list, or a string:
+
+```elixir
+# JSON-style entries (tool-call friendly)
+{:ok, users} = MyApp.Blog.Post.Jido.Read.run(
+  %{sort: [%{"field" => "created_at", "direction" => "desc"}]},
+  %{domain: MyApp.Blog}
+)
+
+# Keyword list syntax
+{:ok, users} = MyApp.Blog.Post.Jido.Read.run(
+  %{sort: [created_at: :desc, title: :asc]},
+  %{domain: MyApp.Blog}
+)
+
+# String syntax (- prefix for descending)
+{:ok, users} = MyApp.Blog.Post.Jido.Read.run(
+  %{sort: "-created_at,title"},
+  %{domain: MyApp.Blog}
+)
+```
+
+### Pagination
+
+Use `limit` and `offset` for pagination:
+
+```elixir
+# First page (20 items)
+{:ok, page1} = MyApp.Accounts.User.Jido.Read.run(
+  %{limit: 20, offset: 0},
+  %{domain: MyApp.Accounts}
+)
+
+# Second page
+{:ok, page2} = MyApp.Accounts.User.Jido.Read.run(
+  %{limit: 20, offset: 20},
+  %{domain: MyApp.Accounts}
+)
+
+# Combine with filtering and sorting
+{:ok, active_users_page} = MyApp.Accounts.User.Jido.Read.run(
+  %{
+    filter: %{status: "active"},
+    sort: [name: :asc],
+    limit: 50,
+    offset: 100
+  },
+  %{domain: MyApp.Accounts}
+)
+```
+
+### Dynamic Relationship Loading
+
+Use the `load` parameter to dynamically load relationships at query time:
+
+```elixir
+# Load a single relationship
+{:ok, posts} = MyApp.Blog.Post.Jido.Read.run(
+  %{load: :author},
+  %{domain: MyApp.Blog}
+)
+
+# Load multiple relationships
+{:ok, posts} = MyApp.Blog.Post.Jido.Read.run(
+  %{load: [:author, :comments, :tags]},
+  %{domain: MyApp.Blog}
+)
+
+# Load nested relationships
+{:ok, posts} = MyApp.Blog.Post.Jido.Read.run(
+  %{load: [author: [:profile, :roles]]},
+  %{domain: MyApp.Blog}
+)
+
+# Combine with other query parameters
+{:ok, posts} = MyApp.Blog.Post.Jido.Read.run(
+  %{
+    filter: %{status: "published"},
+    sort: [published_at: :desc],
+    limit: 10,
+    load: [author: :profile, comments: :author]
+  },
+  %{domain: MyApp.Blog}
+)
+```
+
+### Configuration
+
+Query parameters are enabled by default for read actions. You can configure this behavior:
+
+```elixir
+jido do
+  # Query params enabled by default
+  action :read
+
+  # Disable query params for a specific action
+  action :read, query_params?: false
+
+  # Set maximum page size (clamps limit parameter)
+  action :read, max_page_size: 100
+
+  # Combine with static load
+  action :read, load: :profile, max_page_size: 50
+
+  # Configure defaults for all read actions
+  all_actions only: [:read], read_query_params?: true
+  all_actions only: [:read], read_max_page_size: 100
+end
+```
+
+**Security Note:** Query parameters use Ash's safe `filter_input` and `sort_input` variants, which:
+
+- Only allow filtering and sorting on public attributes
+- Honor field policies and authorization rules
+- Prevent access to private or sensitive fields
+- Validate all input before executing queries
+
 
 ## Next Steps
 
