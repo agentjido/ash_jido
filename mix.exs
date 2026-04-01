@@ -65,7 +65,7 @@ defmodule AshJido.MixProject do
       {:jido_signal, "~> 2.0"},
       {:libgraph, "~> 0.16.0", override: true},
       {:splode, "~> 0.3"},
-      {:zoi, "~> 0.14"},
+      {:zoi, "~> 0.17"},
 
       # Dev/Test dependencies
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
