@@ -112,5 +112,20 @@ defmodule AshJido.TypeMapper do
     end
   end
 
+  # Converts {:array, Ash.Type.Atom} with items one_of constraints to {:list, {:in, string_values}}
+  defp maybe_add_enum_constraint(opts, %{type: {:array, Ash.Type.Atom}, constraints: constraints})
+       when is_list(constraints) do
+    items = Keyword.get(constraints, :items, [])
+
+    case Keyword.get(items, :one_of) do
+      values when is_list(values) and values != [] ->
+        string_values = Enum.map(values, &to_string/1)
+        Keyword.put(opts, :type, {:list, {:in, string_values}})
+
+      _ ->
+        opts
+    end
+  end
+
   defp maybe_add_enum_constraint(opts, _field_config), do: opts
 end

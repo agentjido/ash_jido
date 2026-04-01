@@ -152,6 +152,22 @@ defmodule AshJido.TypeMapperTest do
       result = TypeMapper.ash_type_to_nimble_options(Ash.Type.Atom, options)
       assert result[:type] == :atom
     end
+
+    test "converts {:array, Ash.Type.Atom} with items one_of to {:list, {:in, string_values}}" do
+      options = %{
+        type: {:array, Ash.Type.Atom},
+        constraints: [items: [one_of: [:individual_policy, :multi_policy, :overview]]]
+      }
+
+      result = TypeMapper.ash_type_to_nimble_options({:array, Ash.Type.Atom}, options)
+      assert result[:type] == {:list, {:in, ["individual_policy", "multi_policy", "overview"]}}
+    end
+
+    test "leaves {:array, Ash.Type.Atom} as {:list, :atom} when no items one_of constraint" do
+      options = %{type: {:array, Ash.Type.Atom}, constraints: []}
+      result = TypeMapper.ash_type_to_nimble_options({:array, Ash.Type.Atom}, options)
+      assert result[:type] == {:list, :atom}
+    end
   end
 
   describe "edge cases and complex scenarios" do
@@ -247,6 +263,14 @@ defmodule AshJido.TypeMapperTest do
 
       # Atom field with one_of constraint should be converted to {:in, string_values}
       assert schema[:category][:type] == {:in, ["a", "b", "c"]}
+    end
+
+    test "converts array of atoms with one_of to {:list, {:in, values}}" do
+      schema = TypeMapper.typed_struct_to_schema(SampleExtractionResult)
+
+      assert schema[:roles][:type] == {:list, {:in, ["admin", "editor", "viewer"]}}
+      assert schema[:roles][:required] == true
+      assert schema[:roles][:doc] == "User roles"
     end
 
     test "handles fields without descriptions" do

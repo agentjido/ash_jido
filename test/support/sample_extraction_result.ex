@@ -18,6 +18,13 @@ defmodule AshJido.Test.SampleExtractionResult do
     )
 
     field(:tags, {:array, :string}, allow_nil?: true, description: "List of tags")
+
+    field(:roles, {:array, :atom},
+      allow_nil?: false,
+      constraints: [items: [one_of: [:admin, :editor, :viewer]]],
+      description: "User roles"
+    )
+
     field(:start_date, :date, allow_nil?: true, description: "Start date")
   end
 end
