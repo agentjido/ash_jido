@@ -3,11 +3,15 @@ defmodule AshJido.ErrorTest do
 
   alias AshJido.Error
 
+  defmodule WrappedError do
+    defexception [:error, message: "wrapped"]
+  end
+
   describe "from_ash/1" do
     test "converts Ash.Error.Invalid to validation_error" do
       ash_error = %Ash.Error.Invalid{
         errors: [
-          %Ash.Error.Changeset.Required{field: :name, message: "is required"}
+          %Ash.Error.Changes.Required{field: :name, type: :attribute}
         ]
       }
 
@@ -16,13 +20,13 @@ defmodule AshJido.ErrorTest do
       assert %Jido.Action.Error.InvalidInputError{} = result
       assert result.message =~ "is required"
       assert result.details.ash_error == ash_error
-      assert result.details.fields == %{name: ["is required"]}
+      assert result.details.fields == %{name: ["attribute name is required"]}
     end
 
     test "converts Ash.Error.Forbidden to execution_error with forbidden reason" do
       ash_error = %Ash.Error.Forbidden{
         errors: [
-          %Ash.Error.Forbidden.Policy{message: "not authorized"}
+          %Ash.Error.Forbidden.Policy{}
         ]
       }
 
@@ -36,7 +40,7 @@ defmodule AshJido.ErrorTest do
     test "converts Ash.Error.Framework to internal_error" do
       ash_error = %Ash.Error.Framework{
         errors: [
-          %Ash.Error.Framework.InvalidReturn{message: "invalid return"}
+          %Ash.Error.Framework.InvalidReturnType{message: "invalid return"}
         ]
       }
 
@@ -69,21 +73,21 @@ defmodule AshJido.ErrorTest do
     end
 
     test "preserves underlying errors in details" do
-      underlying = [%Ash.Error.Changeset.Required{field: :email, message: "is required"}]
+      underlying = [%Ash.Error.Changes.Required{field: :email, type: :attribute}]
       ash_error = %Ash.Error.Invalid{errors: underlying}
 
       result = Error.from_ash(ash_error)
 
       assert length(result.details.underlying_errors) == 1
-      assert hd(result.details.underlying_errors).__struct__ == Ash.Error.Changeset.Required
+      assert hd(result.details.underlying_errors).__struct__ == Ash.Error.Changes.Required
     end
   end
 
   describe "extract_underlying_errors/1" do
     test "extracts errors list from Ash error" do
       errors = [
-        %Ash.Error.Changeset.Required{field: :name, message: "is required"},
-        %Ash.Error.Changeset.Required{field: :email, message: "is required"}
+        %Ash.Error.Changes.Required{field: :name, type: :attribute},
+        %Ash.Error.Changes.Required{field: :email, type: :attribute}
       ]
 
       ash_error = %Ash.Error.Invalid{errors: errors}
@@ -94,8 +98,8 @@ defmodule AshJido.ErrorTest do
     end
 
     test "extracts single error from error field" do
-      inner_error = %Ash.Error.Changeset.Required{field: :name, message: "is required"}
-      ash_error = %Ash.Error.Unknown{error: inner_error, errors: []}
+      inner_error = %Ash.Error.Changes.Required{field: :name, type: :attribute}
+      ash_error = %WrappedError{error: inner_error}
 
       result = Error.extract_underlying_errors(ash_error)
 
@@ -124,24 +128,21 @@ defmodule AshJido.ErrorTest do
     test "extracts field errors from changeset errors" do
       ash_error = %Ash.Error.Invalid{
         errors: [
-          %Ash.Error.Changeset.Required{field: :name, message: "is required"},
-          %Ash.Error.Changeset.InvalidAttribute{field: :email, message: "is invalid"}
+          %Ash.Error.Changes.Required{field: :name, type: :attribute},
+          %Ash.Error.Changes.InvalidAttribute{field: :email, message: "is invalid"}
         ]
       }
 
       result = Error.extract_field_errors(ash_error)
 
-      assert result.name == ["is required"]
+      assert result.name == ["attribute name is required"]
       assert result.email == ["is invalid"]
     end
 
     test "extracts field errors from path-based errors" do
       ash_error = %Ash.Error.Invalid{
         errors: [
-          %Ash.Error.Changeset.InvalidAttribute{
-            path: [:user, :profile, :name],
-            message: "is too short"
-          }
+          %{path: [:user, :profile, :name], message: "is too short"}
         ]
       }
 
@@ -153,20 +154,20 @@ defmodule AshJido.ErrorTest do
     test "groups multiple errors per field" do
       ash_error = %Ash.Error.Invalid{
         errors: [
-          %Ash.Error.Changeset.Required{field: :name, message: "is required"},
-          %Ash.Error.Changeset.InvalidAttribute{field: :name, message: "is too short"}
+          %Ash.Error.Changes.Required{field: :name, type: :attribute},
+          %Ash.Error.Changes.InvalidAttribute{field: :name, message: "is too short"}
         ]
       }
 
       result = Error.extract_field_errors(ash_error)
 
-      assert result.name == ["is required", "is too short"]
+      assert result.name == ["attribute name is required", "is too short"]
     end
 
     test "returns empty map for errors without field information" do
       ash_error = %Ash.Error.Invalid{
         errors: [
-          %Ash.Error.Framework.InvalidReturn{message: "invalid"}
+          %Ash.Error.Framework.InvalidReturnType{message: "invalid"}
         ]
       }
 
@@ -180,9 +181,9 @@ defmodule AshJido.ErrorTest do
     test "extracts changeset-related errors" do
       ash_error = %Ash.Error.Invalid{
         errors: [
-          %Ash.Error.Changeset.Required{field: :name, message: "is required"},
-          %Ash.Error.Changeset.InvalidAttribute{field: :email, message: "is invalid"},
-          %Ash.Error.Framework.InvalidReturn{message: "framework error"}
+          %Ash.Error.Changes.Required{field: :name, type: :attribute},
+          %Ash.Error.Changes.InvalidAttribute{field: :email, message: "is invalid"},
+          %Ash.Error.Framework.InvalidReturnType{message: "framework error"}
         ]
       }
 
@@ -191,27 +192,27 @@ defmodule AshJido.ErrorTest do
       assert length(result) == 2
 
       changeset_modules = Enum.map(result, & &1.type)
-      assert Ash.Error.Changeset.Required in changeset_modules
-      assert Ash.Error.Changeset.InvalidAttribute in changeset_modules
+      assert Ash.Error.Changes.Required in changeset_modules
+      assert Ash.Error.Changes.InvalidAttribute in changeset_modules
     end
 
-    test "extracts validation-related errors" do
+    test "extracts change-related invalid attribute errors" do
       ash_error = %Ash.Error.Invalid{
         errors: [
-          %Ash.Error.Validation.InvalidAttribute{field: :age, message: "must be positive"}
+          %Ash.Error.Changes.InvalidAttribute{field: :age, message: "must be positive"}
         ]
       }
 
       result = Error.extract_changeset_errors(ash_error)
 
       assert length(result) == 1
-      assert hd(result).type == Ash.Error.Validation.InvalidAttribute
+      assert hd(result).type == Ash.Error.Changes.InvalidAttribute
     end
 
     test "includes error details in result" do
       ash_error = %Ash.Error.Invalid{
         errors: [
-          %Ash.Error.Changeset.Required{field: :name, message: "is required"}
+          %Ash.Error.Changes.Required{field: :name, type: :attribute}
         ]
       }
 
@@ -224,7 +225,7 @@ defmodule AshJido.ErrorTest do
     test "returns empty list when no changeset errors" do
       ash_error = %Ash.Error.Invalid{
         errors: [
-          %Ash.Error.Framework.InvalidReturn{message: "framework error"}
+          %Ash.Error.Framework.InvalidReturnType{message: "framework error"}
         ]
       }
 
@@ -238,8 +239,8 @@ defmodule AshJido.ErrorTest do
     test "builds complete details map with all error information" do
       ash_error = %Ash.Error.Invalid{
         errors: [
-          %Ash.Error.Changeset.Required{field: :name, message: "is required"},
-          %Ash.Error.Changeset.InvalidAttribute{field: :email, message: "is invalid"}
+          %Ash.Error.Changes.Required{field: :name, type: :attribute},
+          %Ash.Error.Changes.InvalidAttribute{field: :email, message: "is invalid"}
         ]
       }
 

@@ -89,12 +89,12 @@ defmodule AshJido.Error do
     |> extract_underlying_errors()
     |> Enum.flat_map(fn error ->
       case error do
-        %{field: field, message: message} when not is_nil(field) ->
-          [{field, message}]
+        %{field: field} when not is_nil(field) ->
+          [{field, error_message(error)}]
 
-        %{path: path, message: message} when is_list(path) and length(path) > 0 ->
+        %{path: path} when is_list(path) and length(path) > 0 ->
           field = List.last(path)
-          [{field, message}]
+          [{field, error_message(error)}]
 
         _ ->
           []
@@ -116,10 +116,7 @@ defmodule AshJido.Error do
     |> Enum.filter(fn error ->
       case error do
         %{__struct__: module} ->
-          module_name = module |> Module.split() |> Enum.join(".")
-
-          String.contains?(module_name, "Changeset") or
-            String.contains?(module_name, "Validation")
+          change_or_validation_error_module?(module)
 
         _ ->
           false
@@ -143,5 +140,20 @@ defmodule AshJido.Error do
       fields: extract_field_errors(ash_error),
       changeset_errors: extract_changeset_errors(ash_error)
     }
+  end
+
+  defp error_message(%{message: message}) when is_binary(message) and message != "", do: message
+  defp error_message(error) when is_exception(error), do: Exception.message(error)
+  defp error_message(error), do: inspect(error)
+
+  defp change_or_validation_error_module?(module) when is_atom(module) do
+    case Module.split(module) do
+      ["Ash", "Error", namespace | _]
+      when namespace in ["Changes", "Changeset", "Validation"] ->
+        true
+
+      _ ->
+        false
+    end
   end
 end

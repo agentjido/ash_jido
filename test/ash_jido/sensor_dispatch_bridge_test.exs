@@ -3,6 +3,21 @@ defmodule AshJido.SensorDispatchBridgeTest do
 
   alias AshJido.SensorDispatchBridge
 
+  defmodule EchoSensor do
+    use Jido.Sensor,
+      name: "echo_sensor",
+      description: "Emits any forwarded signal back to the configured agent ref",
+      schema: Zoi.object(%{}, coerce: true)
+
+    @impl true
+    def init(_config, _context), do: {:ok, %{}}
+
+    @impl true
+    def handle_event(%Jido.Signal{} = signal, state), do: {:ok, state, [{:emit, signal}]}
+
+    def handle_event(_event, state), do: {:ok, state}
+  end
+
   describe "forward/2" do
     test "returns error when runtime is not available (dead pid)" do
       # Create a process and kill it
@@ -19,53 +34,51 @@ defmodule AshJido.SensorDispatchBridgeTest do
     end
 
     test "returns error for invalid signal message format" do
-      # Start a mock runtime
-      pid = spawn(fn -> receive_loop() end)
+      pid = start_sensor_runtime(self())
 
       assert {:error, :invalid_signal_message} =
                SensorDispatchBridge.forward({:invalid, nil}, pid)
     end
 
     test "successfully forwards signal to runtime" do
-      # Start a mock runtime that accepts signals
       parent = self()
-      pid = spawn(fn -> signal_receiver_loop(parent) end)
+      pid = start_sensor_runtime(parent)
 
-      signal = Jido.Signal.new("test.signal", %{data: "value"})
+      {:ok, signal} = Jido.Signal.new("test.signal", %{data: "value"})
 
       assert :ok = SensorDispatchBridge.forward(signal, pid)
-      assert_receive {:signal_received, ^signal}, 500
+      assert_receive {:signal, ^signal}, 500
     end
 
     test "successfully forwards signal wrapped in tuple" do
       parent = self()
-      pid = spawn(fn -> signal_receiver_loop(parent) end)
+      pid = start_sensor_runtime(parent)
 
-      signal = Jido.Signal.new("test.signal", %{data: "value"})
+      {:ok, signal} = Jido.Signal.new("test.signal", %{data: "value"})
 
       assert :ok = SensorDispatchBridge.forward({:signal, signal}, pid)
-      assert_receive {:signal_received, ^signal}, 500
+      assert_receive {:signal, ^signal}, 500
     end
 
     test "successfully forwards signal wrapped in ok tuple" do
       parent = self()
-      pid = spawn(fn -> signal_receiver_loop(parent) end)
+      pid = start_sensor_runtime(parent)
 
-      signal = Jido.Signal.new("test.signal", %{data: "value"})
+      {:ok, signal} = Jido.Signal.new("test.signal", %{data: "value"})
 
       assert :ok = SensorDispatchBridge.forward({:signal, {:ok, signal}}, pid)
-      assert_receive {:signal_received, ^signal}, 500
+      assert_receive {:signal, ^signal}, 500
     end
   end
 
   describe "forward_many/2" do
     test "forwards multiple signals and counts successes" do
       parent = self()
-      pid = spawn(fn -> signal_receiver_loop(parent) end)
+      pid = start_sensor_runtime(parent)
 
-      signal1 = Jido.Signal.new("test.signal1", %{id: 1})
-      signal2 = Jido.Signal.new("test.signal2", %{id: 2})
-      signal3 = Jido.Signal.new("test.signal3", %{id: 3})
+      {:ok, signal1} = Jido.Signal.new("test.signal1", %{id: 1})
+      {:ok, signal2} = Jido.Signal.new("test.signal2", %{id: 2})
+      {:ok, signal3} = Jido.Signal.new("test.signal3", %{id: 3})
 
       messages = [
         signal1,
@@ -78,16 +91,16 @@ defmodule AshJido.SensorDispatchBridgeTest do
       assert result.forwarded == 3
       assert result.errors == []
 
-      assert_receive {:signal_received, ^signal1}, 500
-      assert_receive {:signal_received, ^signal2}, 500
-      assert_receive {:signal_received, ^signal3}, 500
+      assert_receive {:signal, ^signal1}, 500
+      assert_receive {:signal, ^signal2}, 500
+      assert_receive {:signal, ^signal3}, 500
     end
 
     test "tracks errors for invalid signals" do
       parent = self()
-      pid = spawn(fn -> signal_receiver_loop(parent) end)
+      pid = start_sensor_runtime(parent)
 
-      signal = Jido.Signal.new("test.signal", %{})
+      {:ok, signal} = Jido.Signal.new("test.signal", %{})
       invalid_message = {:invalid, "format"}
 
       messages = [signal, invalid_message]
@@ -104,7 +117,7 @@ defmodule AshJido.SensorDispatchBridgeTest do
       dead_pid = spawn(fn -> nil end)
       Process.sleep(10)
 
-      signal = Jido.Signal.new("test.signal", %{})
+      {:ok, signal} = Jido.Signal.new("test.signal", %{})
 
       result = SensorDispatchBridge.forward_many([signal], dead_pid)
 
@@ -114,7 +127,7 @@ defmodule AshJido.SensorDispatchBridgeTest do
     end
 
     test "returns empty result for empty list" do
-      pid = spawn(fn -> receive_loop() end)
+      pid = start_sensor_runtime(self())
 
       result = SensorDispatchBridge.forward_many([], pid)
 
@@ -126,15 +139,15 @@ defmodule AshJido.SensorDispatchBridgeTest do
   describe "forward_or_ignore/2" do
     test "returns :ok on successful forward" do
       parent = self()
-      pid = spawn(fn -> signal_receiver_loop(parent) end)
+      pid = start_sensor_runtime(parent)
 
-      signal = Jido.Signal.new("test.signal", %{})
+      {:ok, signal} = Jido.Signal.new("test.signal", %{})
 
       assert :ok = SensorDispatchBridge.forward_or_ignore(signal, pid)
     end
 
     test "returns :ignored for invalid signal message" do
-      pid = spawn(fn -> receive_loop() end)
+      pid = start_sensor_runtime(self())
 
       assert :ignored = SensorDispatchBridge.forward_or_ignore({:invalid, nil}, pid)
     end
@@ -143,29 +156,16 @@ defmodule AshJido.SensorDispatchBridgeTest do
       dead_pid = spawn(fn -> nil end)
       Process.sleep(10)
 
-      signal = Jido.Signal.new("test.signal", %{})
+      {:ok, signal} = Jido.Signal.new("test.signal", %{})
 
       assert {:error, :runtime_unavailable} =
                SensorDispatchBridge.forward_or_ignore(signal, dead_pid)
     end
   end
 
-  # Helper functions for test processes
-
-  defp receive_loop do
-    receive do
-      _ -> receive_loop()
-    end
-  end
-
-  defp signal_receiver_loop(parent) do
-    receive do
-      {:signal, signal} ->
-        send(parent, {:signal_received, signal})
-        signal_receiver_loop(parent)
-
-      _ ->
-        signal_receiver_loop(parent)
-    end
+  defp start_sensor_runtime(agent_ref) do
+    start_supervised!(
+      {Jido.Sensor.Runtime, sensor: EchoSensor, config: %{}, context: %{agent_ref: agent_ref}}
+    )
   end
 end
