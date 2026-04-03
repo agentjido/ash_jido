@@ -171,7 +171,7 @@ defmodule AshJido.IntegrationTest do
       read_result = User.Jido.Read.run(%{}, context)
 
       case read_result do
-        {:ok, users} when is_list(users) ->
+        {:ok, %{result: users}} when is_list(users) ->
           assert length(users) >= 1
           found_user = Enum.find(users, &(&1[:email] == "jane@example.com"))
           assert found_user != nil

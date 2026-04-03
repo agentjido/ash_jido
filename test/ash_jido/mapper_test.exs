@@ -17,7 +17,7 @@ defmodule AshJido.MapperTest do
       assert {:ok, %{id: "123", name: "John", email: "john@example.com", age: 30}} = result
     end
 
-    test "converts list of resources to list of maps" do
+    test "wraps list of resources in result map" do
       users = [
         %User{id: "1", name: "Alice", email: "alice@example.com", age: 25},
         %User{id: "2", name: "Bob", email: "bob@example.com", age: 35}
@@ -25,11 +25,8 @@ defmodule AshJido.MapperTest do
 
       result = Mapper.wrap_result({:ok, users}, %{output_map?: true})
 
-      assert {:ok,
-              [
-                %{id: "1", name: "Alice", email: "alice@example.com", age: 25},
-                %{id: "2", name: "Bob", email: "bob@example.com", age: 35}
-              ]} = result
+      assert {:ok, %{result: converted_users}} = result
+      assert [%{id: "1", name: "Alice"}, %{id: "2", name: "Bob"}] = converted_users
     end
 
     test "skips conversion when output_map? false" do
@@ -48,14 +45,14 @@ defmodule AshJido.MapperTest do
       assert {:ok, %{id: "456", name: "Jane", email: "jane@example.com", age: 28}} = result
     end
 
-    test "handles raw list without tuple wrapper" do
+    test "wraps raw list in result map" do
       users = [
         %User{id: "1", name: "Alice", email: "alice@example.com", age: 25}
       ]
 
       result = Mapper.wrap_result(users, %{output_map?: true})
 
-      assert {:ok, [%{id: "1", name: "Alice", email: "alice@example.com", age: 25}]} = result
+      assert {:ok, %{result: [%{id: "1", name: "Alice"}]}} = result
     end
 
     test "propagates non-exception errors unchanged" do
@@ -105,16 +102,58 @@ defmodule AshJido.MapperTest do
       assert {:ok, %{id: "123", name: "John", email: "john@example.com", age: 30}} = result
     end
 
-    test "handles empty list" do
+    test "wraps empty list in result map" do
       result = Mapper.wrap_result({:ok, []}, %{output_map?: true})
 
-      assert {:ok, []} = result
+      assert {:ok, %{result: []}} = result
     end
 
-    test "handles nil data" do
+    test "wraps nil data in result map" do
       result = Mapper.wrap_result({:ok, nil}, %{output_map?: true})
 
-      assert {:ok, nil} = result
+      assert {:ok, %{result: nil}} = result
+    end
+
+    test "wraps string result in map" do
+      result = Mapper.wrap_result({:ok, "hello"}, %{output_map?: true})
+
+      assert {:ok, %{result: "hello"}} = result
+    end
+
+    test "wraps integer result in map" do
+      result = Mapper.wrap_result({:ok, 42}, %{output_map?: true})
+
+      assert {:ok, %{result: 42}} = result
+    end
+
+    test "wraps boolean result in map" do
+      result = Mapper.wrap_result({:ok, true}, %{output_map?: true})
+
+      assert {:ok, %{result: true}} = result
+    end
+
+    test "wraps atom result in map" do
+      result = Mapper.wrap_result({:ok, :custom_atom}, %{output_map?: true})
+
+      assert {:ok, %{result: :custom_atom}} = result
+    end
+
+    test "wraps raw string (from Ash generic action) in map" do
+      result = Mapper.wrap_result("raw string", %{output_map?: true})
+
+      assert {:ok, %{result: "raw string"}} = result
+    end
+
+    test "wraps raw integer in map" do
+      result = Mapper.wrap_result(123, %{output_map?: true})
+
+      assert {:ok, %{result: 123}} = result
+    end
+
+    test "passes map results through unchanged" do
+      result = Mapper.wrap_result({:ok, %{key: "value"}}, %{output_map?: true})
+
+      assert {:ok, %{key: "value"}} = result
     end
 
     test "converts exception with fallback when Jido.Error not available" do

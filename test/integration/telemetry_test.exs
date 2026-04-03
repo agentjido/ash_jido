@@ -61,7 +61,9 @@ defmodule AshJido.TelemetryTest do
       |> Ash.Changeset.for_create(:create, %{title: "hello"}, domain: Domain)
       |> Ash.create!(domain: Domain)
 
-      assert {:ok, results} = ResourceWithTelemetry.Jido.Read.run(%{}, %{domain: Domain})
+      assert {:ok, %{result: results}} =
+               ResourceWithTelemetry.Jido.Read.run(%{}, %{domain: Domain})
+
       assert is_list(results)
 
       assert_receive {:telemetry_event, [:jido, :action, :ash_jido, :start], start, start_meta}

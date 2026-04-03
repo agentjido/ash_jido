@@ -158,7 +158,7 @@ defmodule AshJido.ModuleNameOverrideTest do
       read_result = AshJido.Test.Readers.AllItemsReader.run(%{}, context)
 
       case read_result do
-        {:ok, items} when is_list(items) ->
+        {:ok, %{result: items}} when is_list(items) ->
           assert length(items) >= 2
           titles = Enum.map(items, & &1[:title])
           assert "Item 1" in titles
