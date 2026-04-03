@@ -87,6 +87,12 @@ jobs:
         working-directory: ash_jido_consumer
         run: mix deps.get
 
+      - name: Compile ash_jido dependency tree
+        working-directory: ash_jido_consumer
+        run: |
+          mix deps.compile ash_jido --include-children
+          mix deps.compile libgraph --force
+
       - name: Check formatting
         working-directory: ash_jido_consumer
         run: mix format --check-formatted
