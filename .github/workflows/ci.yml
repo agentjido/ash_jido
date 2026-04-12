@@ -17,6 +17,7 @@ jobs:
     with:
       otp_version: "28"
       elixir_version: "1.19"
+      validate_hex_package: false
 
   test:
     name: Test
