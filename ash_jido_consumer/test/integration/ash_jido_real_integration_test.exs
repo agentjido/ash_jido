@@ -151,7 +151,7 @@ defmodule AshJidoConsumer.RealIntegrationTest do
           %{domain: Content, signal_dispatch: {:noop, []}}
         )
 
-      assert {:ok, posts} = Post.Jido.Read.run(%{}, %{domain: Content})
+      assert {:ok, %{result: posts}} = Post.Jido.Read.run(%{}, %{domain: Content})
       loaded_post = Enum.find(posts, &(&1[:title] == "Loaded Post"))
 
       assert loaded_post[:author][:id] == author.id
@@ -486,10 +486,10 @@ defmodule AshJidoConsumer.RealIntegrationTest do
       assert note_a[:tenant_id] == "tenant_a"
       assert note_b[:tenant_id] == "tenant_b"
 
-      assert {:ok, tenant_a_notes} =
+      assert {:ok, %{result: tenant_a_notes}} =
                Note.Jido.Read.run(%{}, %{domain: Tenanting, tenant: "tenant_a"})
 
-      assert {:ok, tenant_b_notes} =
+      assert {:ok, %{result: tenant_b_notes}} =
                Note.Jido.Read.run(%{}, %{domain: Tenanting, tenant: "tenant_b"})
 
       assert Enum.count(tenant_a_notes) == 1
