@@ -63,7 +63,7 @@ defmodule AshJidoConsumer.GuideWalkthroughTest do
                  %{domain: Content, signal_dispatch: {:noop, []}}
                )
 
-      assert {:ok, posts} = Post.Jido.Read.run(%{}, %{domain: Content})
+      assert {:ok, %{result: posts}} = Post.Jido.Read.run(%{}, %{domain: Content})
       loaded_post = Enum.find(posts, &(&1[:title] == "Loaded Guide Post"))
 
       assert loaded_post[:author][:id] == author.id
