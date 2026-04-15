@@ -195,18 +195,18 @@ defmodule AshJido.GuideExamplesTest do
         |> Ash.create!(domain: Domain)
 
       {:ok, post} =
-        Post.Jido.Create.run(
+        Post.Jido.CreatePost.run(
           %{title: "Ash + Jido", author_id: author.id},
           %{domain: Domain}
         )
 
-      {:ok, %{result: posts}} = Post.Jido.Read.run(%{}, %{domain: Domain})
+      {:ok, %{result: posts}} = Post.Jido.ListPosts.run(%{}, %{domain: Domain})
       loaded_post = Enum.find(posts, &(&1[:id] == post[:id]))
 
       assert loaded_post[:author][:id] == author.id
       assert loaded_post[:author][:name] == "Ada"
 
-      {:ok, published} = Post.Jido.Publish.run(%{id: post[:id]}, %{domain: Domain})
+      {:ok, published} = Post.Jido.PublishPost.run(%{id: post[:id]}, %{domain: Domain})
       assert published[:status] == :published
     end
   end
@@ -216,7 +216,7 @@ defmodule AshJido.GuideExamplesTest do
       actor = %{id: "scope_actor", name: "Scope User"}
 
       assert {:ok, doc} =
-               ProtectedDocument.Jido.Create.run(
+               ProtectedDocument.Jido.CreateProtectedDoc.run(
                  %{title: "Scoped Secret"},
                  %{domain: Domain, scope: %{actor: actor}}
                )
@@ -228,7 +228,7 @@ defmodule AshJido.GuideExamplesTest do
       actor = %{id: "scope_actor_nil", name: "Scope Nil User"}
 
       assert {:error, error} =
-               ProtectedDocument.Jido.Create.run(
+               ProtectedDocument.Jido.CreateProtectedDoc.run(
                  %{title: "Scoped Secret"},
                  %{domain: Domain, scope: %{actor: actor}, actor: nil}
                )
@@ -238,7 +238,7 @@ defmodule AshJido.GuideExamplesTest do
 
     test "authorize? false can bypass actor policy checks for protected create" do
       assert {:ok, doc} =
-               ProtectedDocument.Jido.Create.run(
+               ProtectedDocument.Jido.CreateProtectedDoc.run(
                  %{title: "Policy Bypass"},
                  %{domain: Domain, actor: nil, authorize?: false}
                )
@@ -265,15 +265,15 @@ defmodule AshJido.GuideExamplesTest do
   describe "tools walkthrough" do
     test "exports action metadata and callable tool maps" do
       actions = AshJido.Tools.actions(Post)
-      assert Post.Jido.Create in actions
+      assert Post.Jido.CreatePost in actions
 
       domain_actions = AshJido.Tools.actions(Domain)
-      assert Post.Jido.Create in domain_actions
-      assert Post.Jido.Publish in domain_actions
+      assert Post.Jido.CreatePost in domain_actions
+      assert Post.Jido.PublishPost in domain_actions
 
-      assert Post.Jido.Create.tags() == ["guide", "content"]
-      assert Post.Jido.Create.category() == "ash.create"
-      assert Post.Jido.Create.vsn() == "1.0.0"
+      assert Post.Jido.CreatePost.tags() == ["guide", "content"]
+      assert Post.Jido.CreatePost.category() == "ash.create"
+      assert Post.Jido.CreatePost.vsn() == "1.0.0"
 
       user_tools = AshJido.Tools.tools(AshJido.Test.User)
       create_user_tool = Enum.find(user_tools, &(&1.name == "create_user"))
@@ -314,7 +314,7 @@ defmodule AshJido.GuideExamplesTest do
         |> Ash.create!(domain: Domain)
 
       assert {:ok, _post} =
-               Post.Jido.Create.run(
+               Post.Jido.CreatePost.run(
                  %{title: "Signal Post", author_id: author.id},
                  %{domain: Domain, signal_dispatch: {:pid, target: self()}}
                )
@@ -358,13 +358,13 @@ defmodule AshJido.GuideExamplesTest do
   describe "failure semantics walkthrough" do
     test "missing domain raises argument error" do
       assert_raise ArgumentError, ~r/AshJido: :domain must be provided in context/, fn ->
-        Post.Jido.Read.run(%{}, %{})
+        Post.Jido.ListPosts.run(%{}, %{})
       end
     end
 
     test "missing id for update action returns a deterministic error" do
       assert {:error, %Jido.Action.Error.ExecutionFailureError{} = error} =
-               Post.Jido.Publish.run(%{}, %{domain: Domain})
+               Post.Jido.PublishPost.run(%{}, %{domain: Domain})
 
       assert error.message == "Update actions require an 'id' parameter"
     end
@@ -376,7 +376,7 @@ defmodule AshJido.GuideExamplesTest do
         |> Ash.create!(domain: Domain)
 
       assert {:error, %Jido.Action.Error.InvalidInputError{} = error} =
-               Post.Jido.Create.run(
+               Post.Jido.CreatePost.run(
                  %{title: "Missing Dispatch", author_id: author.id},
                  %{domain: Domain, signal_dispatch: nil}
                )
@@ -398,7 +398,7 @@ defmodule AshJido.GuideExamplesTest do
         {:named, [target: {:name, :ash_jido_missing_target}, delivery_mode: :sync]}
 
       assert {:ok, created} =
-               Post.Jido.Create.run(
+               Post.Jido.CreatePost.run(
                  %{title: "Dispatch Failure Post", author_id: author.id},
                  %{domain: Domain, signal_dispatch: missing_named_dispatch}
                )

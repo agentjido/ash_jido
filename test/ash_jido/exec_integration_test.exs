@@ -164,7 +164,7 @@ defmodule AshJido.ExecIntegrationTest do
 
   describe "Jido.Exec.run/3 with output_map?: true (default)" do
     test "scalar string result passes through Jido.Exec validation" do
-      action_module = ScalarResource.Jido.Greet
+      action_module = ScalarResource.Jido.GreetUser
 
       result =
         Jido.Exec.run(action_module, %{name: "World"}, %{domain: ExecTestDomain})
@@ -173,7 +173,7 @@ defmodule AshJido.ExecIntegrationTest do
     end
 
     test "scalar integer result passes through Jido.Exec validation" do
-      action_module = ScalarResource.Jido.Count
+      action_module = ScalarResource.Jido.CountItems
 
       result = Jido.Exec.run(action_module, %{}, %{domain: ExecTestDomain})
 
@@ -181,7 +181,7 @@ defmodule AshJido.ExecIntegrationTest do
     end
 
     test "scalar boolean result passes through Jido.Exec validation" do
-      action_module = ScalarResource.Jido.Check
+      action_module = ScalarResource.Jido.CheckStatus
 
       result = Jido.Exec.run(action_module, %{}, %{domain: ExecTestDomain})
 
@@ -189,7 +189,7 @@ defmodule AshJido.ExecIntegrationTest do
     end
 
     test "scalar atom result passes through Jido.Exec validation" do
-      action_module = ScalarResource.Jido.Status
+      action_module = ScalarResource.Jido.GetStatus
 
       result = Jido.Exec.run(action_module, %{}, %{domain: ExecTestDomain})
 
@@ -197,7 +197,7 @@ defmodule AshJido.ExecIntegrationTest do
     end
 
     test "void action result passes through Jido.Exec validation" do
-      action_module = ScalarResource.Jido.Nothing
+      action_module = ScalarResource.Jido.GetNothing
 
       result = Jido.Exec.run(action_module, %{}, %{domain: ExecTestDomain})
 
@@ -207,7 +207,7 @@ defmodule AshJido.ExecIntegrationTest do
     end
 
     test "list result passes through Jido.Exec validation" do
-      action_module = ScalarResource.Jido.GetTags
+      action_module = ScalarResource.Jido.ListTags
 
       result = Jido.Exec.run(action_module, %{}, %{domain: ExecTestDomain})
 
@@ -215,7 +215,7 @@ defmodule AshJido.ExecIntegrationTest do
     end
 
     test "map result passes through Jido.Exec validation" do
-      action_module = ScalarResource.Jido.GetMap
+      action_module = ScalarResource.Jido.GetMapData
 
       result = Jido.Exec.run(action_module, %{}, %{domain: ExecTestDomain})
 
@@ -227,7 +227,7 @@ defmodule AshJido.ExecIntegrationTest do
 
   describe "Jido.Exec.run/3 with output_map?: false" do
     test "scalar string result passes through Jido.Exec validation" do
-      action_module = ScalarRawResource.Jido.Greet
+      action_module = ScalarRawResource.Jido.GreetUserRaw
 
       result =
         Jido.Exec.run(action_module, %{name: "World"}, %{domain: ExecTestDomain})
@@ -236,7 +236,7 @@ defmodule AshJido.ExecIntegrationTest do
     end
 
     test "list result passes through Jido.Exec validation" do
-      action_module = ScalarRawResource.Jido.GetTags
+      action_module = ScalarRawResource.Jido.ListTagsRaw
 
       result = Jido.Exec.run(action_module, %{}, %{domain: ExecTestDomain})
 

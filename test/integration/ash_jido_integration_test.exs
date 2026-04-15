@@ -42,12 +42,12 @@ defmodule AshJido.IntegrationTest do
       # Check that the expected Jido.Action modules were generated
       expected_modules = [
         User.Jido.Register,
-        User.Jido.ByEmail,
+        User.Jido.FindUserByEmail,
         User.Jido.Read,
-        User.Jido.UpdateAge,
+        User.Jido.UpdateUserAge,
         Post.Jido.Create,
         Post.Jido.Read,
-        Post.Jido.Publish
+        Post.Jido.PublishPost
       ]
 
       for module <- expected_modules do
@@ -78,11 +78,11 @@ defmodule AshJido.IntegrationTest do
       assert :age in schema_keys
 
       # Test custom named action
-      by_email_module = User.Jido.ByEmail
+      by_email_module = User.Jido.FindUserByEmail
       assert by_email_module.name() == "find_user_by_email"
 
-      # Test Post.Jido.Publish
-      publish_module = Post.Jido.Publish
+      # Test Post.Jido.PublishPost
+      publish_module = Post.Jido.PublishPost
       assert publish_module.name() == "publish_post"
     end
 
@@ -183,7 +183,7 @@ defmodule AshJido.IntegrationTest do
 
     test "custom action names work correctly" do
       # Test the by_email action which has a custom name
-      by_email_module = User.Jido.ByEmail
+      by_email_module = User.Jido.FindUserByEmail
       assert by_email_module.name() == "find_user_by_email"
 
       # Read actions include action arguments and query params
@@ -218,7 +218,7 @@ defmodule AshJido.IntegrationTest do
         content: "This post is published"
       }
 
-      {:ok, published_post} = Post.Jido.Publish.run(publish_params, context)
+      {:ok, published_post} = Post.Jido.PublishPost.run(publish_params, context)
       assert published_post[:title] == "Published Post"
       # Set by the publish action
       assert published_post[:published] == true
@@ -228,15 +228,15 @@ defmodule AshJido.IntegrationTest do
       # Test that having multiple resources with AshJido doesn't cause conflicts
       user_modules = [
         User.Jido.Register,
-        User.Jido.ByEmail,
+        User.Jido.FindUserByEmail,
         User.Jido.Read,
-        User.Jido.UpdateAge
+        User.Jido.UpdateUserAge
       ]
 
       post_modules = [
         Post.Jido.Create,
         Post.Jido.Read,
-        Post.Jido.Publish
+        Post.Jido.PublishPost
       ]
 
       # All modules should be loadable and distinct
