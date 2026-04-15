@@ -26,6 +26,18 @@ defmodule AshJido.Generator do
     module_name
   end
 
+  @doc """
+  Returns the fully qualified module name that would be generated for the
+  given `jido_action` entry on `resource`. Performs no compilation.
+
+  Used by the DSL transformer to validate that a resource's `jido` entries
+  resolve to distinct module names before any of them are generated.
+  """
+  def target_module_name(resource, jido_action, dsl_state) do
+    ash_action = get_ash_action(resource, jido_action.action, dsl_state)
+    build_module_name(resource, jido_action, ash_action)
+  end
+
   defp get_ash_action(resource, action_name, dsl_state) do
     # Get all actions from the actions section using Spark transformer
     all_actions = Transformer.get_entities(dsl_state, [:actions])
@@ -39,12 +51,15 @@ defmodule AshJido.Generator do
   defp build_module_name(resource, jido_action, ash_action) do
     case jido_action.module_name do
       nil ->
-        # Use default module naming
-        _resource_name = resource |> Module.split() |> List.last()
-        action_name = ash_action.name |> to_string() |> Macro.camelize()
+        # Derive from the Jido entry's `name:` when present so multiple
+        # entries on the same Ash action can produce distinct modules.
+        # Fall back to the Ash action name when `name:` is unset.
+        segment =
+          (jido_action.name || to_string(ash_action.name))
+          |> to_string()
+          |> Macro.camelize()
 
-        base_module = Module.concat([resource, "Jido"])
-        Module.concat([base_module, action_name])
+        Module.concat([resource, "Jido", segment])
 
       custom_module_name ->
         # Use the custom module name provided in DSL
