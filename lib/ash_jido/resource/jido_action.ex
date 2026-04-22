@@ -18,6 +18,7 @@ defmodule AshJido.Resource.JidoAction do
     :signal_source,
     :__spark_metadata__,
     emit_signals?: false,
+    include_private?: false,
     telemetry?: false,
     output_map?: true,
     query_params?: true
@@ -37,6 +38,7 @@ defmodule AshJido.Resource.JidoAction do
           signal_type: String.t() | nil,
           signal_source: String.t() | nil,
           emit_signals?: boolean(),
+          include_private?: boolean(),
           telemetry?: boolean(),
           output_map?: boolean(),
           query_params?: boolean()

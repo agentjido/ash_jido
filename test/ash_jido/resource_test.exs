@@ -33,6 +33,7 @@ defmodule AshJido.ResourceTest do
       assert jido_action.output_map? == true
       assert jido_action.emit_signals? == false
       assert jido_action.telemetry? == false
+      assert jido_action.include_private? == false
     end
 
     test "AllActions struct has expected defaults" do

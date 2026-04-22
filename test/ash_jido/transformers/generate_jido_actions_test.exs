@@ -79,14 +79,15 @@ defmodule AshJido.Resource.Transformers.GenerateJidoActionsTest do
 
     attributes do
       uuid_primary_key(:id)
-      attribute(:name, :string, allow_nil?: false)
+      attribute(:name, :string, allow_nil?: false, public?: true)
+      attribute(:internal_code, :string, public?: false)
     end
 
     actions do
       defaults([:read])
 
       create :register do
-        accept([:name])
+        accept([:name, :internal_code])
       end
     end
 
@@ -107,14 +108,15 @@ defmodule AshJido.Resource.Transformers.GenerateJidoActionsTest do
 
     attributes do
       uuid_primary_key(:id)
-      attribute(:name, :string, allow_nil?: false)
+      attribute(:name, :string, allow_nil?: false, public?: true)
+      attribute(:internal_code, :string, public?: false)
     end
 
     actions do
       defaults([:read])
 
       create :register do
-        accept([:name])
+        accept([:name, :internal_code])
       end
 
       read :internal_lookup do
@@ -371,6 +373,50 @@ defmodule AshJido.Resource.Transformers.GenerateJidoActionsTest do
 
       assert Enum.any?(generated_module_names, &String.ends_with?(&1, ".Jido.Register"))
       assert Enum.any?(generated_module_names, &String.ends_with?(&1, ".Jido.InternalLookup"))
+    end
+
+    test "all_actions include_private? propagates private input schema exposure" do
+      unique_suffix = System.unique_integer([:positive])
+      resource_module = Module.concat(__MODULE__, :"PrivateInputResource#{unique_suffix}")
+
+      resource_ast =
+        quote do
+          defmodule unquote(resource_module) do
+            use Ash.Resource,
+              domain: nil,
+              extensions: [AshJido],
+              data_layer: Ash.DataLayer.Ets
+
+            ets do
+              private?(true)
+            end
+
+            attributes do
+              uuid_primary_key(:id)
+              attribute(:name, :string, allow_nil?: false, public?: true)
+              attribute(:internal_code, :string, public?: false)
+            end
+
+            actions do
+              create :create do
+                accept([:name, :internal_code])
+              end
+            end
+
+            jido do
+              all_actions(include_private?: true)
+            end
+          end
+        end
+
+      Code.compile_quoted(resource_ast)
+
+      assert Keyword.has_key?(Module.concat([resource_module, "Jido", "Create"]).schema(), :name)
+
+      assert Keyword.has_key?(
+               Module.concat([resource_module, "Jido", "Create"]).schema(),
+               :internal_code
+             )
     end
   end
 

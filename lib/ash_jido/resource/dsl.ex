@@ -111,6 +111,12 @@ defmodule AshJido.Resource.Dsl do
           default: true,
           doc: "Convert output structs to maps (recommended for AI tools)"
         ],
+        include_private?: [
+          type: :boolean,
+          default: false,
+          doc:
+            "Include inputs with `public?: false` in the generated schema. Intended only for trusted/internal tool catalogs."
+        ],
         load: [
           type: :any,
           doc: "Static Ash.Query.load statement to apply to generated read actions"
@@ -189,7 +195,7 @@ defmodule AshJido.Resource.Dsl do
         include_private?: [
           type: :boolean,
           default: false,
-          doc: "Include actions with `public?: false`. Intended only for trusted/internal tool catalogs."
+          doc: "Include actions and inputs with `public?: false`. Intended only for trusted/internal tool catalogs."
         ],
         category: [
           type: :string,
