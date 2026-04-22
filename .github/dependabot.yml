@@ -1,0 +1,53 @@
+version: 2
+updates:
+  - package-ecosystem: "mix"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/Chicago"
+    open-pull-requests-limit: 5
+    groups:
+      ash:
+        patterns:
+          - "ash"
+          - "spark"
+          - "splode"
+      jido:
+        patterns:
+          - "jido"
+          - "jido_action"
+          - "jido_signal"
+      dev-tooling:
+        dependency-type: "development"
+
+  - package-ecosystem: "mix"
+    directory: "/ash_jido_consumer"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:30"
+      timezone: "America/Chicago"
+    open-pull-requests-limit: 5
+    groups:
+      ash:
+        patterns:
+          - "ash"
+          - "ash_postgres"
+          - "spark"
+          - "splode"
+      jido:
+        patterns:
+          - "jido"
+          - "jido_action"
+          - "jido_signal"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "10:00"
+      timezone: "America/Chicago"
+    open-pull-requests-limit: 5
