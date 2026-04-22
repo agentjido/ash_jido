@@ -75,7 +75,7 @@ jobs:
       - name: Compile dependencies
         run: |
           mix deps.compile --include-children
-          mix deps.compile libgraph --force
+          MIX_ENV=test mix deps.compile libgraph --force
 
       - name: Run coverage
         run: mix coveralls
