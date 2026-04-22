@@ -32,7 +32,9 @@ end
 
 - `all_actions` expands only Ash actions with `public?: true` by default
 - Use explicit `action :private_action` entries for deliberate per-action private exposure
-- Use `include_private?: true` only for trusted/internal tool catalogs
+- Generated schemas expose only public accepted attributes and public action arguments by default
+- Use `include_private?: true` only for trusted/internal tool catalogs that may expose private actions or inputs
+- Ash authorization, policies, and runtime validation remain authoritative when actions execute
 
 ## Naming Conventions
 

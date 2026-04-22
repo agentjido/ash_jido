@@ -107,6 +107,12 @@ jido do
 end
 ```
 
+Generated schemas also use Ash's public input boundary by default. Accepted
+attributes and action arguments marked `public?: false` are omitted from the
+Jido schema unless `include_private?: true` is set for a trusted/internal tool.
+This controls tool exposure; Ash authorization, policies, and runtime validation
+remain authoritative when the action executes.
+
 You can filter which actions to expose:
 
 ```elixir
@@ -204,6 +210,7 @@ Each action in the `jido` section supports these options:
 | `tags` | `list(string)` | `[]` | Tags for categorization and AI discovery |
 | `vsn` | `string` | `nil` | Optional semantic version metadata |
 | `output_map?` | `boolean` | `true` | Convert output structs to maps |
+| `include_private?` | `boolean` | `false` | Include inputs with `public?: false` in generated schemas for trusted/internal tools |
 | `load` | `term` | `nil` | Static `Ash.Query.load/2` statement for read actions |
 | `query_params?` | `boolean` | `true` | Enable query parameters (filter, sort, limit, offset, load) for read actions |
 | `max_page_size` | `pos_integer` | `nil` | Maximum limit value for read actions (clamps the limit parameter) |
@@ -218,7 +225,7 @@ Each action in the `jido` section supports these options:
 - `read_load` for static read relationship loading
 - `read_query_params?` to enable/disable query parameters for read actions
 - `read_max_page_size` to set maximum page size for read actions
-- `include_private?` to include Ash actions with `public?: false` in trusted/internal catalogs
+- `include_private?` to include Ash actions and inputs with `public?: false` in trusted/internal catalogs
 - `category` (default `ash.<action_type>`)
 - `tags`
 - `vsn`

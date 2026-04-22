@@ -150,7 +150,9 @@ than once.
 `all_actions` follows Ash's public API boundary by default: it expands only actions
 marked `public?: true`. Explicit `action :name` entries remain the way to expose a
 specific private action deliberately, and `include_private?: true` is available for
-trusted/internal tool catalogs.
+trusted/internal tool catalogs. Generated schemas also follow Ash's public input
+boundary by default and omit accepted attributes or action arguments marked
+`public?: false`.
 
 ```elixir
 jido do
@@ -202,6 +204,7 @@ Published signals include Ash metadata in `signal.extensions["jido_metadata"]`.
 | `tags` | list(string) | `[]` | Tags for categorization |
 | `vsn` | string | `nil` | Optional semantic version metadata |
 | `output_map?` | boolean | `true` | Convert structs to maps |
+| `include_private?` | boolean | `false` | Include inputs with `public?: false` in generated schemas for trusted/internal tools |
 | `load` | term | `nil` | Static `Ash.Query.load/2` for read actions |
 | `query_params?` | boolean | `true` | Enable query parameters (filter, sort, limit, offset, load) for read actions |
 | `max_page_size` | pos_integer | `nil` | Maximum limit value for read actions (clamps the limit parameter) |
@@ -217,7 +220,7 @@ Published signals include Ash metadata in `signal.extensions["jido_metadata"]`.
 |--------|------|---------|-------------|
 | `only` | list(atom) | all public actions | Limit generated actions |
 | `except` | list(atom) | `[]` | Exclude actions |
-| `include_private?` | boolean | `false` | Include Ash actions with `public?: false` for trusted/internal tool catalogs |
+| `include_private?` | boolean | `false` | Include Ash actions and inputs with `public?: false` for trusted/internal tool catalogs |
 | `category` | string | `ash.<action_type>` | Category added to generated actions |
 | `tags` | list(string) | `[]` | Tags added to all generated actions |
 | `vsn` | string | `nil` | Optional semantic version metadata for generated actions |
@@ -289,6 +292,10 @@ AshJido.Tools.tools(MyApp.Accounts.User)
 | `:read` (`:by_id`) | `get_<resource>_by_id` | `get_user_by_id` |
 | `:update` | `update_<resource>` | `update_user` |
 | `:destroy` | `delete_<resource>` | `delete_user` |
+
+Generated schemas are the public tool surface for discovery and validation. Ash
+authorization, policies, and runtime validation remain the source of truth when an
+action executes.
 
 ## Troubleshooting
 

@@ -118,6 +118,31 @@ defmodule AshJido.GeneratorTest do
     end
   end
 
+  defmodule PublicInputResource do
+    use Ash.Resource,
+      domain: nil,
+      data_layer: Ash.DataLayer.Ets
+
+    ets do
+      private?(true)
+    end
+
+    attributes do
+      uuid_primary_key(:id)
+      attribute(:public_name, :string, allow_nil?: false, public?: true)
+      attribute(:internal_code, :string, public?: false)
+    end
+
+    actions do
+      create :create do
+        accept([:public_name, :internal_code])
+
+        argument(:public_reason, :string, allow_nil?: false, public?: true)
+        argument(:internal_reason, :string, public?: false)
+      end
+    end
+  end
+
   defmodule PrimaryKeyDomain do
     use Ash.Domain, validate_config_inclusion?: false
 
@@ -243,6 +268,51 @@ defmodule AshJido.GeneratorTest do
       assert_raise RuntimeError, ~r/Action non_existent not found/, fn ->
         Generator.generate_jido_action_module(TestResource, jido_action, dsl_state)
       end
+    end
+
+    test "schema excludes non-public accepted attributes and action arguments by default" do
+      dsl_state = PublicInputResource.spark_dsl_config()
+
+      jido_action = %AshJido.Resource.JidoAction{
+        action: :create,
+        name: "public_input_schema",
+        module_name: TestPublicInputSchemaAction,
+        description: "Public input schema",
+        output_map?: true
+      }
+
+      module_name =
+        Generator.generate_jido_action_module(PublicInputResource, jido_action, dsl_state)
+
+      schema = module_name.schema()
+
+      assert Keyword.has_key?(schema, :public_name)
+      assert Keyword.has_key?(schema, :public_reason)
+      refute Keyword.has_key?(schema, :internal_code)
+      refute Keyword.has_key?(schema, :internal_reason)
+    end
+
+    test "schema includes non-public inputs when explicitly opted in" do
+      dsl_state = PublicInputResource.spark_dsl_config()
+
+      jido_action = %AshJido.Resource.JidoAction{
+        action: :create,
+        name: "private_input_schema",
+        module_name: TestPrivateInputSchemaAction,
+        description: "Private input schema",
+        include_private?: true,
+        output_map?: true
+      }
+
+      module_name =
+        Generator.generate_jido_action_module(PublicInputResource, jido_action, dsl_state)
+
+      schema = module_name.schema()
+
+      assert Keyword.has_key?(schema, :public_name)
+      assert Keyword.has_key?(schema, :public_reason)
+      assert Keyword.has_key?(schema, :internal_code)
+      assert Keyword.has_key?(schema, :internal_reason)
     end
   end
 

@@ -89,6 +89,7 @@ defmodule AshJido.Resource.Transformers.GenerateJidoActions do
         signal_type: all_actions.signal_type,
         signal_source: all_actions.signal_source,
         telemetry?: all_actions.telemetry? || false,
+        include_private?: all_actions.include_private? || false,
         output_map?: true,
         query_params?: if(ash_action.type == :read, do: all_actions.read_query_params?, else: false),
         max_page_size: if(ash_action.type == :read, do: all_actions.read_max_page_size)

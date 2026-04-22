@@ -72,7 +72,8 @@ defmodule AshJido do
 
   `all_actions` uses Ash's public API boundary by default and expands only
   actions with `public?: true`. Set `include_private?: true` only for trusted
-  internal tool catalogs.
+  internal tool catalogs. Generated schemas also omit accepted attributes and
+  action arguments marked `public?: false` unless `include_private?: true` is set.
 
   ## Action Options
 
@@ -83,6 +84,7 @@ defmodule AshJido do
   - `tags` - List of tags for categorization (default: `[]`)
   - `vsn` - Optional semantic version identifier for generated action metadata
   - `output_map?` - Convert output structs to maps (default: `true`)
+  - `include_private?` - Include private inputs in generated schemas for trusted/internal tools (default: `false`)
   - `load` - Static `Ash.Query.load/2` statement for read actions (default: `nil`)
   - `emit_signals?` - Emit Jido signals from Ash notifications on create/update/destroy (default: `false`)
   - `signal_dispatch` - Default dispatch configuration for emitted signals (default: `nil`)

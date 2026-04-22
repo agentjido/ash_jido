@@ -551,26 +551,31 @@ defmodule AshJido.Generator do
     case ash_action.type do
       :create ->
         # Create actions use accepted attributes plus action arguments
-        accepted_attrs = accepted_attributes_to_schema(resource, ash_action, dsl_state)
-        action_args = action_args_to_schema(ash_action.arguments || [])
+        accepted_attrs =
+          accepted_attributes_to_schema(resource, ash_action, dsl_state, jido_action)
+
+        action_args = action_args_to_schema(ash_action.arguments || [], jido_action)
         accepted_attrs ++ action_args
 
       :update ->
         # Update actions need primary key fields plus accepted attributes plus action arguments
         base = primary_key_to_schema(dsl_state, :update)
-        accepted_attrs = accepted_attributes_to_schema(resource, ash_action, dsl_state)
-        action_args = action_args_to_schema(ash_action.arguments || [])
+
+        accepted_attrs =
+          accepted_attributes_to_schema(resource, ash_action, dsl_state, jido_action)
+
+        action_args = action_args_to_schema(ash_action.arguments || [], jido_action)
         base ++ accepted_attrs ++ action_args
 
       :destroy ->
         # Destroy actions need primary key fields plus action arguments
         base = primary_key_to_schema(dsl_state, :destroy)
-        action_args = action_args_to_schema(ash_action.arguments || [])
+        action_args = action_args_to_schema(ash_action.arguments || [], jido_action)
         base ++ action_args
 
       _ ->
         # Read and custom actions use their declared arguments
-        base_schema = action_args_to_schema(ash_action.arguments || [])
+        base_schema = action_args_to_schema(ash_action.arguments || [], jido_action)
 
         if ash_action.type == :read and jido_action.query_params? do
           base_schema ++ build_query_params_schema(jido_action)
@@ -628,7 +633,7 @@ defmodule AshJido.Generator do
     ]
   end
 
-  defp accepted_attributes_to_schema(_resource, ash_action, dsl_state) do
+  defp accepted_attributes_to_schema(_resource, ash_action, dsl_state, jido_action) do
     # Get the list of accepted attribute names from the action
     accepted_names = ash_action.accept || []
 
@@ -637,16 +642,20 @@ defmodule AshJido.Generator do
 
     # Filter to only accepted attributes and convert to schema entries
     accepted_names
-    |> Enum.map(fn attr_name ->
+    |> Enum.flat_map(fn attr_name ->
       attr = Enum.find(all_attributes, &(&1.name == attr_name))
 
-      if attr do
-        {attr_name, attribute_to_nimble_options(attr)}
-      else
-        nil
+      cond do
+        is_nil(attr) ->
+          []
+
+        include_schema_input?(attr, jido_action) ->
+          [{attr_name, attribute_to_nimble_options(attr)}]
+
+        true ->
+          []
       end
     end)
-    |> Enum.reject(&is_nil/1)
   end
 
   defp primary_key_fields(dsl_state) do
@@ -707,11 +716,18 @@ defmodule AshJido.Generator do
     opts
   end
 
-  defp action_args_to_schema(arguments) do
-    Enum.map(arguments, fn arg ->
+  defp action_args_to_schema(arguments, jido_action) do
+    arguments
+    |> Enum.filter(&include_schema_input?(&1, jido_action))
+    |> Enum.map(fn arg ->
       {arg.name, TypeMapper.ash_type_to_nimble_options(arg.type, arg)}
     end)
   end
+
+  defp include_schema_input?(_input, %{include_private?: true}), do: true
+
+  defp include_schema_input?(%{public?: false}, _jido_action), do: false
+  defp include_schema_input?(_input, _jido_action), do: true
 
   defp pluralize(word) do
     cond do
