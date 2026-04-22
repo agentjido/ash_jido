@@ -4,6 +4,7 @@ defmodule AshJido.SignalEmitter do
   require Logger
 
   alias Jido.Action.Error
+  alias Jido.Signal
 
   @doc false
   @spec validate_dispatch_config(map(), struct(), module(), atom(), atom()) ::
@@ -56,11 +57,16 @@ defmodule AshJido.SignalEmitter do
     notifications
     |> List.wrap()
     |> Enum.reduce(%{sent: 0, failed: []}, fn notification, acc ->
+      notification = ensure_action_name(notification, action_name)
+
       with {:ok, signal} <-
-             notification_to_signal(notification, resource, action_name, jido_config),
-           :ok <- dispatch_signal(signal, dispatch) do
+             AshJido.SignalFactory.from_notification(notification, jido_config),
+           %{sent: 1, failed: []} <- emit_signals([signal], dispatch, resource, action_name) do
         %{acc | sent: acc.sent + 1}
       else
+        %{sent: 0, failed: [failure]} ->
+          %{acc | failed: [Map.put(failure, :notification, notification) | acc.failed]}
+
         {:error, reason} ->
           failure = %{
             reason: reason,
@@ -68,6 +74,32 @@ defmodule AshJido.SignalEmitter do
           }
 
           Logger.warning("AshJido failed to emit signal for #{inspect(resource)}.#{action_name}: #{inspect(reason)}")
+
+          %{acc | failed: [failure | acc.failed]}
+      end
+    end)
+    |> Map.update!(:failed, &Enum.reverse/1)
+  end
+
+  @doc false
+  @spec emit_signals([Signal.t()], term(), module(), atom()) :: %{sent: non_neg_integer(), failed: [map()]}
+  def emit_signals(signals, dispatch, resource, action_name) do
+    signals
+    |> List.wrap()
+    |> Enum.reduce(%{sent: 0, failed: []}, fn signal, acc ->
+      case dispatch_signal(signal, dispatch) do
+        :ok ->
+          %{acc | sent: acc.sent + 1}
+
+        {:error, reason} ->
+          failure = %{
+            reason: reason,
+            signal: signal
+          }
+
+          Logger.warning(
+            "AshJido failed to dispatch signal for #{inspect(resource)}.#{action_name}: #{inspect(reason)}"
+          )
 
           %{acc | failed: [failure | acc.failed]}
       end
@@ -85,67 +117,32 @@ defmodule AshJido.SignalEmitter do
     end
   end
 
-  defp notification_to_signal(notification, resource, action_name, jido_config) do
-    signal_type = jido_config.signal_type || default_signal_type(resource, action_name)
-    source = jido_config.signal_source || default_signal_source(resource)
-    subject = extract_subject(notification.data)
+  defp ensure_action_name(%Ash.Notifier.Notification{action: %{name: name}} = notification, _action_name)
+       when not is_nil(name),
+       do: notification
 
-    attrs =
-      [source: source]
-      |> maybe_put_subject(subject)
+  defp ensure_action_name(%Ash.Notifier.Notification{action: action} = notification, action_name)
+       when is_map(action) do
+    %{notification | action: Map.put(action, :name, action_name)}
+  end
 
-    data = %{
-      action: action_name,
-      action_type: extract_action_type(notification),
-      metadata: notification.metadata,
-      resource: resource,
-      result: notification.data
-    }
-
-    Jido.Signal.new(signal_type, data, attrs)
+  defp ensure_action_name(%Ash.Notifier.Notification{} = notification, action_name) do
+    %{notification | action: %{name: action_name, type: nil}}
   end
 
   defp dispatch_signal(_signal, nil), do: {:error, :missing_dispatch}
+
+  defp dispatch_signal(signal, {:ash_jido_bus, bus}) do
+    case Jido.Signal.Bus.publish(bus, [signal]) do
+      {:ok, _recorded_signals} -> :ok
+      {:error, reason} -> {:error, reason}
+    end
+  end
 
   defp dispatch_signal(signal, dispatch) do
     case Jido.Signal.Dispatch.dispatch(signal, dispatch) do
       :ok -> :ok
       {:error, reason} -> {:error, reason}
-    end
-  end
-
-  defp maybe_put_subject(attrs, nil), do: attrs
-  defp maybe_put_subject(attrs, subject), do: Keyword.put(attrs, :subject, subject)
-
-  defp default_signal_type(resource, action_name) do
-    resource_segment =
-      resource
-      |> Module.split()
-      |> List.last()
-      |> Macro.underscore()
-
-    "ash_jido.#{resource_segment}.#{action_name}"
-  end
-
-  defp default_signal_source(resource) do
-    resource_segments =
-      resource
-      |> Module.split()
-      |> Enum.map(&Macro.underscore/1)
-      |> Enum.join("/")
-
-    "/ash_jido/#{resource_segments}"
-  end
-
-  defp extract_subject(%{id: id}) when not is_nil(id), do: to_string(id)
-  defp extract_subject(%{id: id}) when is_nil(id), do: nil
-  defp extract_subject(%_{} = struct), do: extract_subject(Map.from_struct(struct))
-  defp extract_subject(_), do: nil
-
-  defp extract_action_type(notification) do
-    case notification.action do
-      %{type: type} -> type
-      _ -> nil
     end
   end
 end

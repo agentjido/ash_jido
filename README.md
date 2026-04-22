@@ -167,9 +167,10 @@ jido do
 end
 ```
 
-### Reactive Signals (Phase 1)
+### Reactive Signals
 
-Add `AshJido.Notifier` to the resource and configure publications in `jido`:
+The canonical Ash integration path is `AshJido.Notifier`: add it to the resource and configure
+publications in `jido` when you want resource lifecycle events published to a Jido signal bus:
 
 ```elixir
 defmodule MyApp.Post do
@@ -191,7 +192,11 @@ defmodule MyApp.Post do
 end
 ```
 
-Published signals include Ash metadata in `signal.extensions["jido_metadata"]`.
+Generated actions can also emit signals with `emit_signals?: true`; this is best when a tool run
+needs runtime dispatch overrides or telemetry signal counters. Both paths build payloads through
+`AshJido.SignalFactory`, so signal type/source/subject and `signal.extensions["jido_metadata"]`
+are consistent. Generated-action signals include all Ash attributes in `signal.data`; notifier
+publications use the configured `include` mode.
 
 ### Action Options
 

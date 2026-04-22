@@ -94,8 +94,11 @@ defmodule AshJido.SignalEmissionTest do
       {:ok, _resource} = ResourceWithSignals.Jido.Create.run(%{title: "Create Signal"}, context)
 
       assert_receive {:signal, %Jido.Signal{} = signal}
-      assert signal.data.action == :create
-      assert signal.data.resource == ResourceWithSignals
+      assert signal.type == "ash.resource_with_signals.create"
+      assert signal.source == "/ash/resource_with_signals/create/create"
+      assert signal.data.title == "Create Signal"
+      assert signal_metadata(signal).ash_action == :create
+      assert signal_metadata(signal).ash_resource == ResourceWithSignals
     end
 
     test "update actions emit notification signals" do
@@ -107,8 +110,10 @@ defmodule AshJido.SignalEmissionTest do
 
       assert updated[:title] == "After"
       assert_receive {:signal, %Jido.Signal{} = signal}
-      assert signal.data.action == :update
-      assert signal.data.resource == ResourceWithSignals
+      assert signal.type == "ash.resource_with_signals.update"
+      assert signal.data.title == "After"
+      assert signal_metadata(signal).ash_action == :update
+      assert signal_metadata(signal).ash_resource == ResourceWithSignals
     end
 
     test "destroy actions emit notification signals" do
@@ -121,8 +126,10 @@ defmodule AshJido.SignalEmissionTest do
                ResourceWithSignals.Jido.Destroy.run(%{id: created[:id]}, context)
 
       assert_receive {:signal, %Jido.Signal{} = signal}
-      assert signal.data.action == :destroy
-      assert signal.data.resource == ResourceWithSignals
+      assert signal.type == "ash.resource_with_signals.destroy"
+      assert signal.data.id == created[:id]
+      assert signal_metadata(signal).ash_action == :destroy
+      assert signal_metadata(signal).ash_resource == ResourceWithSignals
     end
 
     test "returns validation error when emit_signals? is enabled and dispatch config is missing" do
@@ -233,5 +240,12 @@ defmodule AshJido.SignalEmissionTest do
       assert {:error, :runtime_unavailable} =
                AshJido.SensorDispatchBridge.forward_or_ignore(signal, :ash_jido_missing_runtime)
     end
+  end
+
+  defp signal_metadata(signal) do
+    Map.get(signal, :jido_metadata) ||
+      signal
+      |> Map.get(:extensions, %{})
+      |> Map.get("jido_metadata", %{})
   end
 end
