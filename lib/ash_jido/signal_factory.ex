@@ -19,14 +19,31 @@ defmodule AshJido.SignalFactory do
   @type reason :: term()
 
   @doc """
-  Builds a `Jido.Signal` from an Ash notifier notification and publication config.
+  Builds a `Jido.Signal` from an Ash notifier notification and signal configuration.
   """
   @spec from_notification(Notification.t(), Publication.t()) ::
           {:ok, Signal.t()} | {:error, reason()}
   def from_notification(%Notification{} = notification, %Publication{} = publication) do
+    build_signal(notification, publication, source: nil)
+  end
+
+  @spec from_notification(Notification.t(), map()) ::
+          {:ok, Signal.t()} | {:error, reason()}
+  def from_notification(%Notification{} = notification, signal_config) when is_map(signal_config) do
+    publication = %Publication{
+      actions: [notification.action.name],
+      signal_type: Map.get(signal_config, :signal_type),
+      include: :all,
+      metadata: []
+    }
+
+    build_signal(notification, publication, source: Map.get(signal_config, :signal_source))
+  end
+
+  defp build_signal(%Notification{} = notification, %Publication{} = publication, opts) do
     signal_type = resolve_signal_type(notification, publication)
     signal_data = build_signal_data(notification, publication)
-    signal_source = build_source(notification)
+    signal_source = Keyword.get(opts, :source) || build_source(notification)
     signal_metadata = build_metadata(notification, publication)
 
     with {:ok, signal} <-

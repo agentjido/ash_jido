@@ -42,7 +42,7 @@ defmodule AshJido.Notifier do
           end
         end)
 
-      publish_signals(bus, signals)
+      dispatch_signals(bus, signals, resource, action_name)
     else
       {:error, :no_publications} ->
         :ok
@@ -121,18 +121,11 @@ defmodule AshJido.Notifier do
 
   defp resolve_bus(bus), do: {:ok, bus}
 
-  defp publish_signals(_bus, []), do: :ok
+  defp dispatch_signals(_bus, [], _resource, _action_name), do: :ok
 
-  defp publish_signals(bus, signals) do
-    case Jido.Signal.Bus.publish(bus, signals) do
-      {:ok, _recorded_signals} ->
-        :ok
-
-      {:error, reason} ->
-        Logger.error("AshJido.Notifier failed to publish signals to #{inspect(bus)}: #{inspect(reason)}")
-
-        :ok
-    end
+  defp dispatch_signals(bus, signals, resource, action_name) do
+    _result = AshJido.SignalEmitter.emit_signals(signals, {:ash_jido_bus, bus}, resource, action_name)
+    :ok
   end
 
   defp passes_condition?(%{condition: nil}, _notification), do: true

@@ -170,6 +170,37 @@ defmodule AshJido.SignalFactoryTest do
       assert {:ok, signal} = SignalFactory.from_notification(notification, publication)
       assert signal.subject == "/reactive_resource/abc-123"
     end
+
+    test "generated-action config uses the same canonical notification payload" do
+      notification = build_notification(:create, base_record(%{id: "123", name: "Generated"}))
+
+      jido_action = %AshJido.Resource.JidoAction{
+        action: :create,
+        signal_type: nil,
+        signal_source: nil
+      }
+
+      assert {:ok, signal} = SignalFactory.from_notification(notification, jido_action)
+      assert signal.type == "test.reactive_resource.create"
+      assert signal.source == "/ash/reactive_resource/create/create"
+      assert signal.subject == "/reactive_resource/123"
+      assert signal.data.name == "Generated"
+      assert signal_metadata(signal).ash_action == :create
+    end
+
+    test "generated-action config can override signal type and source" do
+      notification = build_notification(:create, base_record(%{id: "123"}))
+
+      jido_action = %AshJido.Resource.JidoAction{
+        action: :create,
+        signal_type: "custom.generated.created",
+        signal_source: "/custom/generated"
+      }
+
+      assert {:ok, signal} = SignalFactory.from_notification(notification, jido_action)
+      assert signal.type == "custom.generated.created"
+      assert signal.source == "/custom/generated"
+    end
   end
 
   defp build_notification(action_name, data, opts \\ []) do

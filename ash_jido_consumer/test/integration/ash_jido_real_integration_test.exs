@@ -209,8 +209,9 @@ defmodule AshJidoConsumer.RealIntegrationTest do
                )
 
       assert_receive {:signal, %Jido.Signal{} = create_signal}
-      assert create_signal.data.action == :create
-      assert create_signal.data.resource == Post
+      assert create_signal.data.title == "Signal Post"
+      assert signal_metadata(create_signal).ash_action == :create
+      assert signal_metadata(create_signal).ash_resource == Post
       assert create_signal.type == "ash_jido_consumer.content.post.created"
       assert create_signal.source == "/ash_jido_consumer/content/post"
 
@@ -222,15 +223,17 @@ defmodule AshJidoConsumer.RealIntegrationTest do
 
       assert updated[:title] == "Signal Post Updated"
       assert_receive {:signal, %Jido.Signal{} = update_signal}
-      assert update_signal.data.action == :update
-      assert update_signal.data.resource == Post
+      assert update_signal.data.title == "Signal Post Updated"
+      assert signal_metadata(update_signal).ash_action == :update
+      assert signal_metadata(update_signal).ash_resource == Post
 
       assert {:ok, %{deleted: true}} =
                Post.Jido.Destroy.run(%{id: created[:id]}, dispatch_context)
 
       assert_receive {:signal, %Jido.Signal{} = destroy_signal}
-      assert destroy_signal.data.action == :destroy
-      assert destroy_signal.data.resource == Post
+      assert destroy_signal.data.id == created[:id]
+      assert signal_metadata(destroy_signal).ash_action == :destroy
+      assert signal_metadata(destroy_signal).ash_resource == Post
     end
 
     test "missing dispatch config returns a validation error before execution" do
@@ -512,6 +515,13 @@ defmodule AshJidoConsumer.RealIntegrationTest do
       )
 
     handler_id
+  end
+
+  defp signal_metadata(signal) do
+    Map.get(signal, :jido_metadata) ||
+      signal
+      |> Map.get(:extensions, %{})
+      |> Map.get("jido_metadata", %{})
   end
 
   defp flush_telemetry_messages do

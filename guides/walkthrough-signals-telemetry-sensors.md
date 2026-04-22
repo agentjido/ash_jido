@@ -30,6 +30,20 @@ Behavior is opt-in:
 - No signals are emitted unless `emit_signals?` is `true`.
 - No telemetry is emitted unless `telemetry?` is `true`.
 
+`AshJido.Notifier` remains the recommended Ash-native path for resource lifecycle publications to
+a Jido signal bus. Generated actions use the same `AshJido.SignalFactory` payload builder when
+`emit_signals?` is enabled, then dispatch the signal through `signal_dispatch`.
+
+Both paths produce the same envelope conventions:
+
+- `signal.type` is `{prefix}.{resource_short_name}.{action_name}` unless explicitly overridden.
+- `signal.source` follows `/ash/{resource_short_name}/{action_type}/{action_name}` unless explicitly overridden.
+- `signal.subject` identifies the primary key as `/{resource_short_name}/{id}` when available.
+- `signal.extensions["jido_metadata"]` includes Ash resource, action, action type, and timestamp metadata.
+
+Generated-action signals put all available Ash attributes in `signal.data`. Notifier publications
+use the publication `include` mode (`:pkey_only`, `:all`, `:changes_only`, or selected fields).
+
 ## 2. Dispatch to a Runtime Target
 
 Runtime context can override DSL dispatch configuration:
@@ -45,6 +59,7 @@ context = %{
 assert_receive {:signal, %Jido.Signal{} = signal}
 signal.type
 signal.source
+signal.data
 ```
 
 If signaling is enabled and no dispatch config can be resolved (DSL or context), execution fails early with a validation-style error.

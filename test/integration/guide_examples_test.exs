@@ -320,7 +320,8 @@ defmodule AshJido.GuideExamplesTest do
                )
 
       assert_receive {:signal, %Jido.Signal{} = signal}
-      assert signal.data.action == :create
+      assert signal.data.title == "Signal Post"
+      assert signal_metadata(signal).ash_action == :create
 
       assert_receive {:telemetry_event, [:jido, :action, :ash_jido, :start], start, start_meta}
       assert start.system_time > 0
@@ -433,6 +434,13 @@ defmodule AshJido.GuideExamplesTest do
       )
 
     handler_id
+  end
+
+  defp signal_metadata(signal) do
+    Map.get(signal, :jido_metadata) ||
+      signal
+      |> Map.get(:extensions, %{})
+      |> Map.get("jido_metadata", %{})
   end
 
   defp flush_telemetry_messages do

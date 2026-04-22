@@ -87,7 +87,8 @@ defmodule AshJidoConsumer.GuideWalkthroughTest do
                )
 
       assert_receive {:signal, %Jido.Signal{} = signal}
-      assert signal.data.action == :create
+      assert signal.data.title == "Signal Guide Post"
+      assert signal_metadata(signal).ash_action == :create
 
       assert_receive {:telemetry_event, [:jido, :action, :ash_jido, :start], _start, _start_meta}
       assert_receive {:telemetry_event, [:jido, :action, :ash_jido, :stop], stop, stop_meta}
@@ -112,6 +113,13 @@ defmodule AshJidoConsumer.GuideWalkthroughTest do
       )
 
     handler_id
+  end
+
+  defp signal_metadata(signal) do
+    Map.get(signal, :jido_metadata) ||
+      signal
+      |> Map.get(:extensions, %{})
+      |> Map.get("jido_metadata", %{})
   end
 
   defp flush_telemetry_messages do

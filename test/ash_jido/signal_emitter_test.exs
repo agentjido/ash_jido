@@ -191,7 +191,9 @@ defmodule AshJido.SignalEmitterTest do
       assert result.sent == 1
       assert result.failed == []
 
-      assert_receive {:signal, %Jido.Signal{}}, 500
+      assert_receive {:signal, %Jido.Signal{} = signal}, 500
+      assert signal.data == %{id: "123", name: "Test"}
+      assert signal_metadata(signal).ash_action == :create
     end
 
     test "tracks failed emissions" do
@@ -371,8 +373,7 @@ defmodule AshJido.SignalEmitterTest do
         jido_config
       )
 
-      # Default type should be "ash_jido.user.create"
-      assert_receive {:signal, %Jido.Signal{type: "ash_jido.user.create"}}, 500
+      assert_receive {:signal, %Jido.Signal{type: "ash.user.create"}}, 500
     end
 
     test "generates correct default signal source from resource" do
@@ -402,8 +403,7 @@ defmodule AshJido.SignalEmitterTest do
         jido_config
       )
 
-      # Default source should be "/ash_jido/ash_jido/test/user"
-      assert_receive {:signal, %Jido.Signal{source: "/ash_jido/ash_jido/test/user"}}, 500
+      assert_receive {:signal, %Jido.Signal{source: "/ash/user/create/create"}}, 500
     end
 
     test "extracts subject from data with id" do
@@ -433,7 +433,7 @@ defmodule AshJido.SignalEmitterTest do
         jido_config
       )
 
-      assert_receive {:signal, %Jido.Signal{subject: "user-123"}}, 500
+      assert_receive {:signal, %Jido.Signal{subject: "/user/user-123"}}, 500
     end
 
     test "handles data without id for subject" do
@@ -465,5 +465,12 @@ defmodule AshJido.SignalEmitterTest do
 
       assert_receive {:signal, %Jido.Signal{subject: nil}}, 500
     end
+  end
+
+  defp signal_metadata(signal) do
+    Map.get(signal, :jido_metadata) ||
+      signal
+      |> Map.get(:extensions, %{})
+      |> Map.get("jido_metadata", %{})
   end
 end
