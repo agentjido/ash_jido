@@ -119,18 +119,15 @@ defmodule AshJido.MultipleJidoEntriesTest do
           end
         end
 
-      compiled? =
-        try do
+      error =
+        assert_raise ArgumentError, fn ->
           Code.compile_quoted(resource_ast)
-          true
-        rescue
-          _ -> false
         end
 
-      refute compiled?, """
-      Expected resource compilation to raise because two `jido` entries
-      resolve to the same generated module name. See agentjido/ash_jido#19.
-      """
+      assert error.message =~ "AshJido: multiple `jido` entries"
+      assert error.message =~ "resolve to the same generated module"
+      assert error.message =~ ".Jido.Read"
+      assert error.message =~ "action: :read, name: nil"
     end
   end
 end
