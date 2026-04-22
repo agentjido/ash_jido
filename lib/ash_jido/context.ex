@@ -36,8 +36,14 @@ defmodule AshJido.Context do
   defp require_domain!(context, resource, action_name) do
     case Map.get(context, :domain) do
       nil ->
-        raise ArgumentError,
-              "AshJido: :domain must be provided in context for #{inspect(resource)}.#{action_name}"
+        case Ash.Resource.Info.domain(resource) do
+          nil ->
+            raise ArgumentError,
+                  "AshJido: :domain must be provided in context for #{inspect(resource)}.#{action_name}"
+
+          domain ->
+            domain
+        end
 
       domain ->
         domain

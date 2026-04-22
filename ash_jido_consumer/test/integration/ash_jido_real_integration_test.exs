@@ -389,10 +389,9 @@ defmodule AshJidoConsumer.RealIntegrationTest do
   end
 
   describe "failure semantics" do
-    test "missing domain raises an argument error for generated actions" do
-      assert_raise ArgumentError, ~r/AshJido: :domain must be provided in context/, fn ->
-        User.Jido.Read.run(%{}, %{})
-      end
+    test "generated actions use the resource static domain when context omits domain" do
+      assert {:ok, %{result: users}} = User.Jido.Read.run(%{}, %{})
+      assert is_list(users)
     end
 
     test "update actions require id and return deterministic errors when missing" do

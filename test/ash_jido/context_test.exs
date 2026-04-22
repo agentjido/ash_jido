@@ -12,6 +12,28 @@ defmodule AshJido.ContextTest do
                    end
     end
 
+    test "falls back to the resource static domain when context domain is absent" do
+      opts =
+        Context.extract_ash_opts!(
+          %{},
+          AshJido.Test.ReactiveResource,
+          :read
+        )
+
+      assert opts[:domain] == AshJido.Test.ReactiveDomain
+    end
+
+    test "explicit context domain overrides the resource static domain" do
+      opts =
+        Context.extract_ash_opts!(
+          %{domain: AshJido.Test.Domain},
+          AshJido.Test.ReactiveResource,
+          :read
+        )
+
+      assert opts[:domain] == AshJido.Test.Domain
+    end
+
     test "includes existing base options and optional passthrough keys when provided" do
       tracer = [FakeTracer]
       scope = %{scope: :value}

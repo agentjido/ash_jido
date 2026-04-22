@@ -7,13 +7,13 @@ Bridge Ash Framework resources with Jido agents. Generates `Jido.Action` modules
 - Adds a `jido` DSL section to Ash resources
 - Generates `Jido.Action` modules at compile time for selected actions
 - Maps Ash argument types to NimbleOptions schemas
-- Runs actions via Ash with provided `domain`, `actor`, and `tenant`
+- Runs actions via Ash with the provided or resource-configured `domain`, `actor`, and `tenant`
 - Converts Ash errors to `Jido.Action.Error` (Splode-based) errors
 - Publishes `Jido.Signal` events from Ash action notifications
 
 ## What It Does Not Do
 
-- Auto-discover domains or resources (domain is explicit and required)
+- Auto-discover domains outside Ash resource configuration
 - Bypass Ash authorization, policies, or data layers
 
 ## Installation
@@ -104,11 +104,15 @@ end
 
 ## Context Requirements
 
-The `domain` is **required** in context. An `ArgumentError` is raised if missing.
+AshJido resolves the Ash domain in this order:
+
+1. `context[:domain]`
+2. the resource's static `domain:` configuration
+3. `ArgumentError` if neither is available
 
 ```elixir
 context = %{
-  domain: MyApp.Accounts,       # REQUIRED
+  domain: MyApp.Accounts,       # optional override when the resource has domain: MyApp.Accounts
   actor: current_user,          # optional: for authorization
   tenant: "org_123",            # optional: for multi-tenancy
   authorize?: true,             # optional: explicit authorization mode
@@ -282,7 +286,7 @@ AshJido.Tools.tools(MyApp.Accounts.User)
 ## Troubleshooting
 
 **`AshJido: :domain must be provided in context`**
-- Pass `%{domain: MyApp.Domain}` as the second argument to `run/2`
+- Pass `%{domain: MyApp.Domain}` as the second argument to `run/2`, or configure `domain: MyApp.Domain` on the Ash resource
 
 **`Update actions require an 'id' parameter`**
 - Include `id` in params for `:update` and `:destroy` actions

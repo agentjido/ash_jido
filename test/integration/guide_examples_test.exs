@@ -356,9 +356,14 @@ defmodule AshJido.GuideExamplesTest do
   end
 
   describe "failure semantics walkthrough" do
-    test "missing domain raises argument error" do
+    test "static resource domain is used when runtime context omits domain" do
+      assert {:ok, %{result: posts}} = Post.Jido.Read.run(%{}, %{})
+      assert is_list(posts)
+    end
+
+    test "resources without a static domain still raise when context omits domain" do
       assert_raise ArgumentError, ~r/AshJido: :domain must be provided in context/, fn ->
-        Post.Jido.Read.run(%{}, %{})
+        AshJido.Test.User.Jido.Read.run(%{}, %{})
       end
     end
 

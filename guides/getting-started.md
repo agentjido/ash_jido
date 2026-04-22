@@ -131,7 +131,9 @@ end
 
 ## Using Generated Actions
 
-Call the generated modules using `run/2` with params and a context map. The context must include at minimum a `:domain`:
+Call the generated modules using `run/2` with params and a context map. `context[:domain]`
+overrides the Ash resource's static `domain:` configuration; if neither is available,
+AshJido raises an `ArgumentError`.
 
 ```elixir
 # Create a user
