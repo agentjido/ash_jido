@@ -122,7 +122,7 @@ defmodule AshJido.Resource.Transformers.GenerateJidoActions do
   end
 
   defp validate_unique_module_names!(resource, jido_actions, dsl_state) do
-    duplicates =
+    duplicate =
       jido_actions
       |> Enum.map(fn jido_action ->
         {Generator.target_module_name(resource, jido_action, dsl_state), jido_action}
@@ -131,13 +131,16 @@ defmodule AshJido.Resource.Transformers.GenerateJidoActions do
         fn {module_name, _} -> module_name end,
         fn {_, jido_action} -> jido_action end
       )
-      |> Enum.filter(fn {_, entries} -> length(entries) > 1 end)
+      |> Enum.find(fn
+        {_, [_, _ | _]} -> true
+        _ -> false
+      end)
 
-    case duplicates do
-      [] ->
+    case duplicate do
+      nil ->
         :ok
 
-      [{module_name, entries} | _] ->
+      {module_name, entries} ->
         descriptions =
           Enum.map_join(entries, ", ", fn entry ->
             "action: #{inspect(entry.action)}, name: #{inspect(entry.name)}"

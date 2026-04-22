@@ -190,5 +190,58 @@ defmodule AshJido.MultipleJidoEntriesTest do
       assert error.message =~ "action: :read, name: nil"
       assert error.message =~ "explicit `module_name:`"
     end
+
+    test "raises when explicit module_name values collide" do
+      unique_suffix = System.unique_integer([:positive])
+      module_name = Module.concat(__MODULE__, :"DuplicateExplicitModuleResource#{unique_suffix}")
+      duplicate_module_name = Module.concat([module_name, "Jido", "ReadVariant"])
+
+      resource_ast =
+        quote do
+          defmodule unquote(module_name) do
+            use Ash.Resource,
+              domain: nil,
+              extensions: [AshJido],
+              data_layer: Ash.DataLayer.Ets
+
+            ets do
+              private?(true)
+            end
+
+            attributes do
+              uuid_primary_key(:id)
+              attribute(:title, :string, allow_nil?: false)
+            end
+
+            actions do
+              defaults([:read])
+            end
+
+            jido do
+              action(:read,
+                name: "list_items",
+                module_name: unquote(duplicate_module_name)
+              )
+
+              action(:read,
+                name: "get_item",
+                module_name: unquote(duplicate_module_name)
+              )
+            end
+          end
+        end
+
+      error =
+        assert_raise ArgumentError, fn ->
+          Code.compile_quoted(resource_ast)
+        end
+
+      assert error.message =~ "AshJido: multiple `jido` entries"
+      assert error.message =~ "resolve to the same generated module"
+      assert error.message =~ inspect(duplicate_module_name)
+      assert error.message =~ ~s(action: :read, name: "list_items")
+      assert error.message =~ ~s(action: :read, name: "get_item")
+      assert error.message =~ "explicit `module_name:`"
+    end
   end
 end
