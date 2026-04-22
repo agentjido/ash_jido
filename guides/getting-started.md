@@ -9,7 +9,7 @@ Add `ash_jido` to your dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:ash_jido, "~> 0.1"}
+    {:ash_jido, "~> 0.2"}
   ]
 end
 ```
@@ -183,7 +183,7 @@ The context map supports additional options for authorization and multi-tenancy:
 
 ```elixir
 context = %{
-  domain: MyApp.Accounts,       # Required: the Ash domain
+  domain: MyApp.Accounts,       # Required only when no static resource domain is configured or you need an override
   actor: current_user,          # Optional: for authorization policies
   tenant: "org_123",            # Optional: for multi-tenant apps
   authorize?: true,             # Optional: explicit authorization mode
@@ -230,6 +230,43 @@ Each action in the `jido` section supports these options:
 - `tags`
 - `vsn`
 - `emit_signals?`, `signal_dispatch`, `signal_type`, `signal_source`, and `telemetry?`
+
+### Signals
+
+Use `AshJido.Notifier` for Ash-native lifecycle publications to a Jido signal bus:
+
+```elixir
+defmodule MyApp.Blog.Post do
+  use Ash.Resource,
+    domain: MyApp.Blog,
+    extensions: [AshJido],
+    notifiers: [AshJido.Notifier]
+
+  jido do
+    signal_bus MyApp.SignalBus
+    signal_prefix "blog"
+
+    publish :create, "blog.post.created", include: [:id, :title]
+    publish_all :update, include: :changes_only
+  end
+end
+```
+
+Generated actions can also emit signals when a tool run needs runtime dispatch
+overrides or telemetry signal counters:
+
+```elixir
+jido do
+  action :create,
+    emit_signals?: true,
+    signal_dispatch: {:pid, target: self()},
+    telemetry?: true
+end
+```
+
+Both paths use `AshJido.SignalFactory`. Generated-action signals include all
+available Ash attributes in `signal.data`; notifier publications use the
+configured `include` mode.
 
 ### Telemetry
 

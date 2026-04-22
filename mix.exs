@@ -129,6 +129,7 @@ defmodule AshJido.MixProject do
         {"guides/walkthrough-failure-semantics.md", title: "Failure Semantics"},
         {"guides/walkthrough-tools-and-ai.md", title: "Tools and AI Integration"},
         {"guides/walkthrough-agent-tool-wiring.md", title: "Agent Tool Wiring"},
+        {"guides/release-notes-0-2-0.md", title: "0.2.0 Release Notes"},
         {"CHANGELOG.md", title: "Changelog"},
         {"CONTRIBUTING.md", title: "Contributing"},
         {"usage-rules.md", title: "Usage Rules"}
@@ -153,6 +154,7 @@ defmodule AshJido.MixProject do
           "guides/walkthrough-agent-tool-wiring.md"
         ],
         Project: [
+          "guides/release-notes-0-2-0.md",
           "CHANGELOG.md",
           "CONTRIBUTING.md",
           "usage-rules.md"
