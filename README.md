@@ -57,7 +57,7 @@ end
 Generated modules:
 
 ```elixir
-{:ok, user} = MyApp.User.Jido.Register.run(
+{:ok, user} = MyApp.User.Jido.CreateUser.run(
   %{name: "John", email: "john@example.com"},
   %{domain: MyApp.Accounts}
 )
@@ -135,6 +135,11 @@ jido do
 end
 ```
 
+Generated module names use `module_name:` when provided. Otherwise, named
+entries use the camelized `name:` value, e.g. `name: "list_users"` generates
+`Resource.Jido.ListUsers`; entries without `name:` use the Ash action name,
+e.g. `action :create` generates `Resource.Jido.Create`.
+
 ### Bulk Exposure
 
 ```elixir
@@ -180,7 +185,7 @@ Published signals include Ash metadata in `signal.extensions["jido_metadata"]`.
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `name` | string | auto-generated | Custom Jido action name |
-| `module_name` | atom | `Resource.Jido.Action` | Custom module name |
+| `module_name` | atom | derived from `name` or Ash action | Custom module name |
 | `description` | string | from Ash action | Action description |
 | `category` | string | `nil` | Category for discovery/tool organization |
 | `tags` | list(string) | `[]` | Tags for categorization |
