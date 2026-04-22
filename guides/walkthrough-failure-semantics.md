@@ -16,7 +16,9 @@ AshJido maps Ash failures to Jido action errors.
 
 ### Missing `domain`
 
-Generated actions require `domain` in context and raise `ArgumentError` if omitted.
+Generated actions resolve the Ash domain from `context[:domain]` first, then from the
+resource's static `domain:` configuration. They raise `ArgumentError` only when both
+are missing.
 
 ```elixir
 assert_raise ArgumentError, ~r/:domain must be provided/, fn ->

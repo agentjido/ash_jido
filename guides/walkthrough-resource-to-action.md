@@ -123,7 +123,9 @@ published[:status] # => :published
 
 ## 3. Pass Ash Context Through Runtime Context
 
-`domain` is required. Other Ash options are optional and passed through when present:
+`context[:domain]` is optional when the resource has a static `domain:` configuration.
+When present, it overrides the resource domain. Other Ash options are optional and
+passed through when present:
 
 ```elixir
 context = %{
@@ -188,5 +190,5 @@ end
 Important:
 
 - The agent `tools:` list should use generated module names (`MyApp.Blog.Post.Jido.*`).
-- Pass `domain` in `tool_context` so AshJido actions have required context.
+- Pass `domain` in `tool_context` when overriding the resource's static domain or when the resource has `domain: nil`.
 - Add `actor`, `tenant`, and other Ash options in `tool_context` for policy and tenancy-aware calls.

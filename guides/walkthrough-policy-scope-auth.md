@@ -2,13 +2,14 @@
 
 This walkthrough focuses on policy-aware execution with generated AshJido actions.
 
-## 1. Context: Required vs Optional
+## 1. Context: Domain Resolution and Optional Options
 
-Generated actions always require `domain` in runtime context. All other keys are optional passthroughs.
+Generated actions use `context[:domain]` when present and otherwise fall back to
+the resource's static `domain:` configuration. All other keys are optional passthroughs.
 
 ```elixir
 context = %{
-  domain: MyApp.Accounts,      # required
+  domain: MyApp.Accounts,      # optional override when the resource has a static domain
   actor: current_user,         # optional
   tenant: "org_123",          # optional
   scope: %{actor: current_user}, # optional

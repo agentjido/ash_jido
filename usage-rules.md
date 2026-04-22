@@ -146,7 +146,8 @@ end
 ## Troubleshooting
 
 ### Domain Not Provided Error
-- Domain is **required** in context - provide `%{domain: MyApp.Domain}`
+- AshJido uses `context[:domain]` first, then the resource's static `domain:` configuration
+- Provide `%{domain: MyApp.Domain}` when overriding or when the resource has `domain: nil`
 - Ensure the resource is registered in the domain you're providing
 
 ### Action Not Found Error

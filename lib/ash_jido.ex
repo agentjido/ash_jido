@@ -34,10 +34,12 @@ defmodule AshJido do
 
   ## Context
 
-  The context map **requires** a `:domain` key. An `ArgumentError` is raised if missing.
+  AshJido resolves the Ash domain from `context[:domain]` first, then from the
+  resource's static `domain:` configuration. An `ArgumentError` is raised if
+  neither is available.
 
       context = %{
-        domain: MyApp.Accounts,       # REQUIRED
+        domain: MyApp.Accounts,       # optional override when the resource has a static domain
         actor: current_user,          # optional: for authorization
         tenant: "org_123",            # optional: for multi-tenancy
         authorize?: true,             # optional: explicit authorization mode

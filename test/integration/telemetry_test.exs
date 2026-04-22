@@ -52,6 +52,15 @@ defmodule AshJido.TelemetryTest do
   end
 
   describe "telemetry emission" do
+    test "generated actions use the resource static domain when context omits domain" do
+      ResourceWithTelemetry
+      |> Ash.Changeset.for_create(:create, %{title: "static domain"}, domain: Domain)
+      |> Ash.create!(domain: Domain)
+
+      assert {:ok, %{result: results}} = ResourceWithTelemetry.Jido.Read.run(%{}, %{})
+      assert Enum.any?(results, &(&1[:title] == "static domain"))
+    end
+
     test "emits start and stop events for successful executions" do
       flush_telemetry_messages()
       handler_id = attach_telemetry_handler(self())
