@@ -3,7 +3,7 @@
 ## Commands
 
 - Build: `mix compile`
-- Quality: `mix quality` (format check, compile warnings, credo, dialyzer)
+- Quality: `mix quality` (format check, compile warnings, credo, dialyzer, doctor)
 - Test all: `mix test`
 - Test single: `mix test test/path/to/test.exs:line_number`
 - Format: `mix format`

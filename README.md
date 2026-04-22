@@ -27,7 +27,7 @@ Or add manually to `mix.exs`:
 ```elixir
 def deps do
   [
-    {:ash_jido, "~> 0.1.0"}
+    {:ash_jido, "~> 0.2.0"}
   ]
 end
 ```
@@ -112,7 +112,7 @@ AshJido resolves the Ash domain in this order:
 
 ```elixir
 context = %{
-  domain: MyApp.Accounts,       # optional override when the resource has domain: MyApp.Accounts
+  domain: MyApp.Accounts,       # required only when the resource has no static domain or you need an override
   actor: current_user,          # optional: for authorization
   tenant: "org_123",            # optional: for multi-tenancy
   authorize?: true,             # optional: explicit authorization mode
@@ -322,7 +322,9 @@ For a full error contract and telemetry interpretation, see [Walkthrough: Failur
 - Elixir: ~> 1.18
 - OTP: 27 or 28
 - Ash: ~> 3.12
-- Jido: ~> 2.0
+- Jido: ~> 2.2
+- Jido Action: ~> 2.2
+- Jido Signal: ~> 2.1
 
 ## Documentation
 
@@ -359,4 +361,4 @@ It exercises real integration scenarios end-to-end:
 
 ## License
 
-MIT
+Apache-2.0

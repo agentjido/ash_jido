@@ -34,6 +34,7 @@ The `mix quality` command runs the full quality check suite:
 - Compilation with warnings as errors
 - Credo static analysis
 - Dialyzer type checking
+- Documentation coverage (`mix doctor --raise`)
 
 ## Testing
 
@@ -105,6 +106,21 @@ git commit -m "feat(api)!: change action schema"
 - Reference any related issues
 - Include tests and documentation updates
 - Ensure CI passes
+
+## Release Checklist
+
+Before cutting a release:
+
+1. Confirm release notes and conventional commits cover the release content.
+2. Run `mix test`, `mix quality`, `mix docs`, and `mix coveralls`.
+3. Confirm README, guides, and `usage-rules.md` match the released behavior and
+   dependency baseline.
+4. Run the GitHub release workflow with `dry_run` first and inspect the
+   generated `CHANGELOG.md` output.
+5. Publish through the release workflow when the dry run is clean.
+
+Do not edit `CHANGELOG.md` directly in normal PRs; release automation generates
+it from conventional commits.
 
 ## Questions?
 
