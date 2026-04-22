@@ -73,6 +73,7 @@ defmodule AshJido.Generator do
 
     # Build input schema including accepted attributes
     schema = build_parameter_schema(resource, ash_action, jido_action, dsl_state)
+    primary_key = primary_key_fields(dsl_state)
 
     action_use_opts =
       [
@@ -98,6 +99,7 @@ defmodule AshJido.Generator do
         @ash_action unquote(ash_action.name)
         @ash_action_type unquote(ash_action.type)
         @jido_config unquote(Macro.escape(jido_action))
+        @primary_key unquote(Macro.escape(primary_key))
 
         def on_before_validate_params(params) do
           {:ok, normalize_query_param_keys(params)}
@@ -177,20 +179,13 @@ defmodule AshJido.Generator do
                 {action_result, empty_signal_meta(), false}
 
               :update ->
-                # Load the record to update using its primary key
-                record_id = Map.get(params, :id) || Map.get(params, "id")
-
-                unless record_id do
-                  raise ArgumentError, "Update actions require an 'id' parameter"
-                end
-
-                # Remove id from params to prevent it being passed to changeset
-                update_params = Map.drop(params, [:id, "id"])
+                primary_key = fetch_primary_key!(params, :update)
+                update_params = drop_primary_key_params(params)
 
                 # Load the record first
                 record =
                   @resource
-                  |> Ash.get!(record_id, ash_opts)
+                  |> Ash.get!(primary_key, ash_opts)
 
                 update_result =
                   record
@@ -213,17 +208,12 @@ defmodule AshJido.Generator do
                 {action_result, signal_emission, false}
 
               :destroy ->
-                # Load the record to destroy using its primary key
-                record_id = Map.get(params, :id) || Map.get(params, "id")
-
-                unless record_id do
-                  raise ArgumentError, "Destroy actions require an 'id' parameter"
-                end
+                primary_key = fetch_primary_key!(params, :destroy)
 
                 # Load the record first
                 record =
                   @resource
-                  |> Ash.get!(record_id, ash_opts)
+                  |> Ash.get!(primary_key, ash_opts)
 
                 destroy_result =
                   record
@@ -282,6 +272,56 @@ defmodule AshJido.Generator do
         end
 
         defp empty_signal_meta, do: %{failed: [], sent: 0}
+
+        defp fetch_primary_key!(params, action_type) do
+          values =
+            Map.new(@primary_key, fn key ->
+              {key, fetch_param(params, key)}
+            end)
+
+          missing_keys =
+            values
+            |> Enum.filter(fn {_key, value} -> is_nil(value) end)
+            |> Enum.map(fn {key, _value} -> key end)
+
+          unless Enum.empty?(missing_keys) do
+            raise ArgumentError, missing_primary_key_message(action_type, @primary_key)
+          end
+
+          case @primary_key do
+            [key] -> Map.fetch!(values, key)
+            _ -> values
+          end
+        end
+
+        defp fetch_param(params, key) do
+          case Map.fetch(params, key) do
+            {:ok, value} -> value
+            :error -> Map.get(params, to_string(key))
+          end
+        end
+
+        defp drop_primary_key_params(params) do
+          Enum.reduce(@primary_key, params, fn key, acc ->
+            Map.drop(acc, [key, to_string(key)])
+          end)
+        end
+
+        defp missing_primary_key_message(action_type, primary_key) do
+          cond do
+            action_type == :update and primary_key == [:id] ->
+              "Update actions require an 'id' parameter"
+
+            action_type == :destroy and primary_key == [:id] ->
+              "Destroy actions require an 'id' parameter"
+
+            true ->
+              action_label = action_type |> Atom.to_string() |> String.capitalize()
+              key_list = Enum.map_join(primary_key, ", ", &to_string/1)
+
+              "#{action_label} actions require primary key parameter(s): #{key_list}"
+          end
+        end
 
         defp maybe_load(query, config) do
           case config.load do
@@ -515,15 +555,15 @@ defmodule AshJido.Generator do
         accepted_attrs ++ action_args
 
       :update ->
-        # Update actions need an id field plus accepted attributes plus action arguments
-        base = [id: [type: :string, required: true, doc: "ID of record to update"]]
+        # Update actions need primary key fields plus accepted attributes plus action arguments
+        base = primary_key_to_schema(dsl_state, :update)
         accepted_attrs = accepted_attributes_to_schema(resource, ash_action, dsl_state)
         action_args = action_args_to_schema(ash_action.arguments || [])
         base ++ accepted_attrs ++ action_args
 
       :destroy ->
-        # Destroy actions just need an id
-        [id: [type: :string, required: true, doc: "ID of record to destroy"]]
+        # Destroy actions need primary key fields
+        primary_key_to_schema(dsl_state, :destroy)
 
       _ ->
         # Read and custom actions use their declared arguments
@@ -604,6 +644,40 @@ defmodule AshJido.Generator do
       end
     end)
     |> Enum.reject(&is_nil/1)
+  end
+
+  defp primary_key_fields(dsl_state) do
+    dsl_state
+    |> Transformer.get_entities([:attributes])
+    |> Enum.filter(& &1.primary_key?)
+    |> Enum.map(& &1.name)
+  end
+
+  defp primary_key_to_schema(dsl_state, action_type) do
+    primary_key = primary_key_fields(dsl_state)
+    all_attributes = Transformer.get_entities(dsl_state, [:attributes])
+
+    Enum.map(primary_key, fn attr_name ->
+      attr = Enum.find(all_attributes, &(&1.name == attr_name))
+
+      opts =
+        case attr do
+          nil -> [type: :any]
+          attr -> attribute_to_nimble_options(attr)
+        end
+
+      opts =
+        opts
+        |> Keyword.put(:required, true)
+        |> Keyword.put(:doc, primary_key_doc(attr_name, action_type))
+
+      {attr_name, opts}
+    end)
+  end
+
+  defp primary_key_doc(attr_name, action_type) do
+    action = action_type |> Atom.to_string() |> String.downcase()
+    "Primary key field #{attr_name} of record to #{action}"
   end
 
   defp attribute_to_nimble_options(attr) do

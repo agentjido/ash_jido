@@ -146,13 +146,13 @@ Call the generated modules using `run/2` with params and a context map. The cont
   %{domain: MyApp.Accounts}
 )
 
-# Update a user (requires id)
+# Update a user (requires the resource primary key; id for the default primary key)
 {:ok, updated_user} = MyApp.Accounts.User.Jido.UpdateProfile.run(
   %{id: user[:id], name: "Jane Doe"},
   %{domain: MyApp.Accounts}
 )
 
-# Delete a user (requires id)
+# Delete a user (requires the resource primary key; id for the default primary key)
 {:ok, _} = MyApp.Accounts.User.Jido.Destroy.run(
   %{id: user[:id]},
   %{domain: MyApp.Accounts}
@@ -383,8 +383,8 @@ Each Ash action type maps to corresponding behavior:
 |-----------------|----------|
 | `:create` | Creates a new record via `Ash.create!` |
 | `:read` | Queries records via `Ash.read!` |
-| `:update` | Updates a record (requires `id` param) via `Ash.update!` |
-| `:destroy` | Deletes a record (requires `id` param) via `Ash.destroy!` |
+| `:update` | Updates a record using the resource primary key fields via `Ash.update!` |
+| `:destroy` | Deletes a record using the resource primary key fields via `Ash.destroy!` |
 | `:action` | Runs custom logic via `Ash.run_action!` |
 
 ## Complete Example

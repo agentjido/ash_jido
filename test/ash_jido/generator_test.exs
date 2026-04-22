@@ -57,6 +57,72 @@ defmodule AshJido.GeneratorTest do
     end
   end
 
+  defmodule CustomPrimaryKeyResource do
+    use Ash.Resource,
+      domain: AshJido.GeneratorTest.PrimaryKeyDomain,
+      data_layer: Ash.DataLayer.Ets
+
+    ets do
+      private?(true)
+    end
+
+    attributes do
+      attribute(:slug, :string, primary_key?: true, allow_nil?: false)
+      attribute(:name, :string, allow_nil?: false)
+    end
+
+    actions do
+      defaults([:read])
+
+      create :create do
+        accept([:slug, :name])
+      end
+
+      update :rename do
+        accept([:name])
+      end
+    end
+  end
+
+  defmodule CompositePrimaryKeyResource do
+    use Ash.Resource,
+      domain: AshJido.GeneratorTest.PrimaryKeyDomain,
+      data_layer: Ash.DataLayer.Ets
+
+    ets do
+      private?(true)
+    end
+
+    attributes do
+      attribute(:account_id, :string, primary_key?: true, allow_nil?: false)
+      attribute(:external_id, :string, primary_key?: true, allow_nil?: false)
+      attribute(:name, :string, allow_nil?: false)
+    end
+
+    actions do
+      defaults([:read])
+
+      create :create do
+        accept([:account_id, :external_id, :name])
+      end
+
+      update :rename do
+        accept([:name])
+      end
+
+      destroy(:destroy)
+    end
+  end
+
+  defmodule PrimaryKeyDomain do
+    use Ash.Domain, validate_config_inclusion?: false
+
+    resources do
+      resource(CustomPrimaryKeyResource)
+      resource(CompositePrimaryKeyResource)
+    end
+  end
+
   # Note: Most generator functions are private, so we test via the public interface
 
   describe "generate_jido_action_module/3" do
@@ -290,6 +356,158 @@ defmodule AshJido.GeneratorTest do
       schema = module_name.schema()
       assert Keyword.has_key?(schema, :id)
       assert schema[:id][:required] == true
+    end
+
+    test "update action schema uses custom primary key fields" do
+      dsl_state = CustomPrimaryKeyResource.spark_dsl_config()
+
+      jido_action = %AshJido.Resource.JidoAction{
+        action: :rename,
+        name: "rename_custom_primary_key",
+        module_name: TestCustomPrimaryKeySchemaAction,
+        description: "Rename custom primary key resource",
+        output_map?: true
+      }
+
+      module_name =
+        AshJido.Generator.generate_jido_action_module(
+          CustomPrimaryKeyResource,
+          jido_action,
+          dsl_state
+        )
+
+      schema = module_name.schema()
+
+      assert Keyword.has_key?(schema, :slug)
+      assert schema[:slug][:required] == true
+      refute Keyword.has_key?(schema, :id)
+    end
+
+    test "update action loads records by a non-id primary key" do
+      slug = "custom-#{System.unique_integer([:positive])}"
+
+      CustomPrimaryKeyResource
+      |> Ash.Changeset.for_create(:create, %{slug: slug, name: "Before"}, domain: PrimaryKeyDomain)
+      |> Ash.create!(domain: PrimaryKeyDomain)
+
+      dsl_state = CustomPrimaryKeyResource.spark_dsl_config()
+
+      jido_action = %AshJido.Resource.JidoAction{
+        action: :rename,
+        name: "rename_custom_primary_key_runtime",
+        module_name: TestCustomPrimaryKeyRuntimeAction,
+        description: "Rename custom primary key resource",
+        output_map?: true
+      }
+
+      module_name =
+        AshJido.Generator.generate_jido_action_module(
+          CustomPrimaryKeyResource,
+          jido_action,
+          dsl_state
+        )
+
+      assert {:ok, updated} =
+               module_name.run(%{"slug" => slug, name: "After"}, %{domain: PrimaryKeyDomain})
+
+      assert updated[:slug] == slug
+      assert updated[:name] == "After"
+    end
+
+    test "destroy action schema uses composite primary key fields" do
+      dsl_state = CompositePrimaryKeyResource.spark_dsl_config()
+
+      jido_action = %AshJido.Resource.JidoAction{
+        action: :destroy,
+        name: "destroy_composite_primary_key",
+        module_name: TestCompositePrimaryKeySchemaAction,
+        description: "Destroy composite primary key resource",
+        output_map?: true
+      }
+
+      module_name =
+        AshJido.Generator.generate_jido_action_module(
+          CompositePrimaryKeyResource,
+          jido_action,
+          dsl_state
+        )
+
+      schema = module_name.schema()
+
+      assert Keyword.has_key?(schema, :account_id)
+      assert Keyword.has_key?(schema, :external_id)
+      assert schema[:account_id][:required] == true
+      assert schema[:external_id][:required] == true
+      refute Keyword.has_key?(schema, :id)
+    end
+
+    test "destroy action loads records by a composite primary key" do
+      account_id = "acct-#{System.unique_integer([:positive])}"
+      external_id = "ext-#{System.unique_integer([:positive])}"
+
+      CompositePrimaryKeyResource
+      |> Ash.Changeset.for_create(
+        :create,
+        %{account_id: account_id, external_id: external_id, name: "Composite"},
+        domain: PrimaryKeyDomain
+      )
+      |> Ash.create!(domain: PrimaryKeyDomain)
+
+      dsl_state = CompositePrimaryKeyResource.spark_dsl_config()
+
+      jido_action = %AshJido.Resource.JidoAction{
+        action: :destroy,
+        name: "destroy_composite_primary_key_runtime",
+        module_name: TestCompositePrimaryKeyRuntimeAction,
+        description: "Destroy composite primary key resource",
+        output_map?: true
+      }
+
+      module_name =
+        AshJido.Generator.generate_jido_action_module(
+          CompositePrimaryKeyResource,
+          jido_action,
+          dsl_state
+        )
+
+      assert {:ok, %{deleted: true}} =
+               module_name.run(
+                 %{"account_id" => account_id, external_id: external_id},
+                 %{domain: PrimaryKeyDomain}
+               )
+
+      assert {:ok, nil} =
+               Ash.get(
+                 CompositePrimaryKeyResource,
+                 %{account_id: account_id, external_id: external_id},
+                 domain: PrimaryKeyDomain,
+                 not_found_error?: false
+               )
+    end
+
+    test "composite primary key errors list required key fields" do
+      dsl_state = CompositePrimaryKeyResource.spark_dsl_config()
+
+      jido_action = %AshJido.Resource.JidoAction{
+        action: :rename,
+        name: "rename_composite_primary_key_missing",
+        module_name: TestCompositePrimaryKeyMissingAction,
+        description: "Rename composite primary key resource",
+        output_map?: true
+      }
+
+      module_name =
+        AshJido.Generator.generate_jido_action_module(
+          CompositePrimaryKeyResource,
+          jido_action,
+          dsl_state
+        )
+
+      {:error, jido_error} =
+        module_name.run(%{account_id: "acct", name: "After"}, %{domain: PrimaryKeyDomain})
+
+      assert jido_error.message ==
+               "Update actions require primary key parameter(s): account_id, external_id"
     end
   end
 
