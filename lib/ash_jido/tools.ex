@@ -3,6 +3,9 @@ defmodule AshJido.Tools do
   Helpers for exporting generated AshJido actions as Jido tool definitions.
   """
 
+  @doc """
+  Lists generated AshJido action modules for a resource or domain.
+  """
   @spec actions(module()) :: [module()]
   def actions(target) when is_atom(target) do
     cond do
@@ -17,6 +20,11 @@ defmodule AshJido.Tools do
     end
   end
 
+  @doc """
+  Exports generated actions as Jido tool maps.
+
+  Actions that cannot be converted with `to_tool/0` are skipped.
+  """
   @spec tools(module()) :: [map()]
   def tools(target) when is_atom(target) do
     target

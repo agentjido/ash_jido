@@ -56,9 +56,7 @@ defmodule AshJido.Notifier do
         :ok
 
       {:error, {:invalid_signal_bus_mfa, mfa, reason}} ->
-        Logger.error(
-          "AshJido.Notifier failed resolving signal bus MFA #{inspect(mfa)}: #{inspect(reason)}"
-        )
+        Logger.error("AshJido.Notifier failed resolving signal bus MFA #{inspect(mfa)}: #{inspect(reason)}")
 
         :ok
     end
@@ -131,9 +129,7 @@ defmodule AshJido.Notifier do
         :ok
 
       {:error, reason} ->
-        Logger.error(
-          "AshJido.Notifier failed to publish signals to #{inspect(bus)}: #{inspect(reason)}"
-        )
+        Logger.error("AshJido.Notifier failed to publish signals to #{inspect(bus)}: #{inspect(reason)}")
 
         :ok
     end

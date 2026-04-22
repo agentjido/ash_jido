@@ -27,12 +27,15 @@ defmodule AshJido.MixProject do
       # Test Coverage
       test_coverage: [
         tool: ExCoveralls,
-        summary: [threshold: 90]
+        summary: [threshold: 90],
+        export: "cov"
       ],
 
       # Dialyzer
       dialyzer: [
-        plt_add_apps: [:mix]
+        plt_add_apps: [:mix],
+        plt_local_path: "priv/plts/project.plt",
+        plt_core_path: "priv/plts/core.plt"
       ]
     ]
   end
@@ -69,6 +72,7 @@ defmodule AshJido.MixProject do
       # Dev/Test dependencies
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
+      {:doctor, "~> 0.22", only: :dev, runtime: false},
       {:ex_doc, "~> 0.31", only: :dev, runtime: false},
       {:excoveralls, "~> 0.18", only: [:dev, :test]},
       {:git_hooks, "~> 0.8", only: [:dev, :test], runtime: false},
@@ -81,14 +85,16 @@ defmodule AshJido.MixProject do
 
   defp aliases do
     [
-      setup: ["deps.get", "git_hooks.install"],
+      setup: ["deps.get"],
+      install_hooks: ["git_hooks.install"],
       test: "test --exclude flaky",
       q: ["quality"],
       quality: [
         "format --check-formatted",
         "compile --warnings-as-errors",
         "credo --min-priority higher",
-        "dialyzer"
+        "dialyzer",
+        "doctor --raise"
       ]
     ]
   end
@@ -119,8 +125,7 @@ defmodule AshJido.MixProject do
         {"guides/walkthrough-resource-to-action.md", title: "Resource to Action"},
         {"guides/walkthrough-policy-scope-auth.md", title: "Policy, Scope, and Auth"},
         {"guides/walkthrough-ash-postgres-consumer.md", title: "AshPostgres Consumer Harness"},
-        {"guides/walkthrough-signals-telemetry-sensors.md",
-         title: "Signals, Telemetry, and Sensors"},
+        {"guides/walkthrough-signals-telemetry-sensors.md", title: "Signals, Telemetry, and Sensors"},
         {"guides/walkthrough-failure-semantics.md", title: "Failure Semantics"},
         {"guides/walkthrough-tools-and-ai.md", title: "Tools and AI Integration"},
         {"guides/walkthrough-agent-tool-wiring.md", title: "Agent Tool Wiring"},

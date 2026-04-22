@@ -128,8 +128,7 @@ defmodule AshJido.TelemetryTest do
       assert start_meta.ash_action_name == :explode
       assert start_meta.ash_action_type == :action
 
-      assert_receive {:telemetry_event, [:jido, :action, :ash_jido, :exception], exception,
-                      metadata}
+      assert_receive {:telemetry_event, [:jido, :action, :ash_jido, :exception], exception, metadata}
 
       assert exception.system_time > 0
       assert exception.duration > 0

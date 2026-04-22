@@ -3,6 +3,7 @@ defmodule AshJido.Context do
 
   @optional_passthrough_keys [:authorize?, :tracer, :scope, :context, :timeout]
 
+  @doc false
   @spec extract_ash_opts!(map(), module(), atom()) :: keyword()
   def extract_ash_opts!(context, resource, action_name) when is_map(context) do
     domain = require_domain!(context, resource, action_name)

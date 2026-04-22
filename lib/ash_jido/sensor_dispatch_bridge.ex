@@ -10,6 +10,12 @@ defmodule AshJido.SensorDispatchBridge do
           errors: [%{message: term(), reason: forward_error()}]
         }
 
+  @doc """
+  Forwards a dispatched signal message to a sensor runtime.
+
+  Accepts raw `%Jido.Signal{}` structs and the wrapped signal message shapes
+  commonly received from Jido dispatch targets.
+  """
   @spec forward(term(), Jido.Sensor.Runtime.server()) :: :ok | {:error, forward_error()}
   def forward(message, sensor_runtime) do
     with :ok <- ensure_runtime_available(sensor_runtime),
@@ -18,6 +24,9 @@ defmodule AshJido.SensorDispatchBridge do
     end
   end
 
+  @doc """
+  Forwards many signal messages and returns a summary of successes and failures.
+  """
   @spec forward_many([term()], Jido.Sensor.Runtime.server()) :: forward_many_result()
   def forward_many(messages, sensor_runtime) when is_list(messages) do
     messages
@@ -34,6 +43,9 @@ defmodule AshJido.SensorDispatchBridge do
     |> Map.update!(:errors, &Enum.reverse/1)
   end
 
+  @doc """
+  Forwards a signal message and treats non-signal mailbox noise as ignored.
+  """
   @spec forward_or_ignore(term(), Jido.Sensor.Runtime.server()) ::
           :ok | :ignored | {:error, :runtime_unavailable}
   def forward_or_ignore(message, sensor_runtime) do

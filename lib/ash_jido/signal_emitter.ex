@@ -5,6 +5,7 @@ defmodule AshJido.SignalEmitter do
 
   alias Jido.Action.Error
 
+  @doc false
   @spec validate_dispatch_config(map(), struct(), module(), atom(), atom()) ::
           :ok | {:error, Exception.t()}
   def validate_dispatch_config(_context, jido_config, _resource, _action_name, action_type)
@@ -41,6 +42,7 @@ defmodule AshJido.SignalEmitter do
     end
   end
 
+  @doc false
   @spec emit_notifications(
           [Ash.Notifier.Notification.t()],
           map(),
@@ -65,9 +67,7 @@ defmodule AshJido.SignalEmitter do
             notification: notification
           }
 
-          Logger.warning(
-            "AshJido failed to emit signal for #{inspect(resource)}.#{action_name}: #{inspect(reason)}"
-          )
+          Logger.warning("AshJido failed to emit signal for #{inspect(resource)}.#{action_name}: #{inspect(reason)}")
 
           %{acc | failed: [failure | acc.failed]}
       end
@@ -75,6 +75,7 @@ defmodule AshJido.SignalEmitter do
     |> Map.update!(:failed, &Enum.reverse/1)
   end
 
+  @doc false
   @spec resolve_dispatch_config(map(), struct()) :: term() | nil
   def resolve_dispatch_config(context, jido_config) do
     if Map.has_key?(context, :signal_dispatch) do
