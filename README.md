@@ -147,11 +147,17 @@ than once.
 
 ### Bulk Exposure
 
+`all_actions` follows Ash's public API boundary by default: it expands only actions
+marked `public?: true`. Explicit `action :name` entries remain the way to expose a
+specific private action deliberately, and `include_private?: true` is available for
+trusted/internal tool catalogs.
+
 ```elixir
 jido do
   all_actions
   all_actions except: [:destroy, :internal]
   all_actions only: [:create, :read]
+  all_actions include_private?: true
   all_actions category: "ash.resource"
   all_actions tags: ["public-api"]
   all_actions vsn: "1.0.0"
@@ -209,8 +215,9 @@ Published signals include Ash metadata in `signal.extensions["jido_metadata"]`.
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `only` | list(atom) | all actions | Limit generated actions |
+| `only` | list(atom) | all public actions | Limit generated actions |
 | `except` | list(atom) | `[]` | Exclude actions |
+| `include_private?` | boolean | `false` | Include Ash actions with `public?: false` for trusted/internal tool catalogs |
 | `category` | string | `ash.<action_type>` | Category added to generated actions |
 | `tags` | list(string) | `[]` | Tags added to all generated actions |
 | `vsn` | string | `nil` | Optional semantic version metadata for generated actions |

@@ -62,8 +62,9 @@ defmodule AshJido.Resource.Transformers.GenerateJidoActions do
   end
 
   defp expand_all_actions(_resource, all_actions, dsl_state) do
-    # Get all actions from the resource
-    all_ash_actions = get_all_ash_actions(dsl_state)
+    # Get the public action boundary by default, with an explicit opt-in for
+    # trusted/internal catalogs that intentionally expose private actions.
+    all_ash_actions = get_all_ash_actions(dsl_state, all_actions.include_private?)
 
     # Filter based on only/except options
     filtered_actions = filter_actions(all_ash_actions, all_actions)
@@ -96,8 +97,15 @@ defmodule AshJido.Resource.Transformers.GenerateJidoActions do
   end
 
   defp get_all_ash_actions(dsl_state) do
-    # Get all action types from the DSL state
-    Transformer.get_entities(dsl_state, [:actions])
+    Ash.Resource.Info.public_actions(dsl_state)
+  end
+
+  defp get_all_ash_actions(dsl_state, include_private?) do
+    if include_private? do
+      Transformer.get_entities(dsl_state, [:actions])
+    else
+      get_all_ash_actions(dsl_state)
+    end
   end
 
   defp filter_actions(ash_actions, %{only: only, except: _except}) when not is_nil(only) do

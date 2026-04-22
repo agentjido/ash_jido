@@ -25,8 +25,14 @@ jido do
   # or with filtering
   all_actions except: [:internal_action, :admin_only]
   all_actions only: [:create, :read, :update]
+  # trusted/internal catalogs only
+  all_actions include_private?: true
 end
 ```
+
+- `all_actions` expands only Ash actions with `public?: true` by default
+- Use explicit `action :private_action` entries for deliberate per-action private exposure
+- Use `include_private?: true` only for trusted/internal tool catalogs
 
 ## Naming Conventions
 

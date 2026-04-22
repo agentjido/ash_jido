@@ -65,9 +65,14 @@ defmodule AshJido do
         all_actions
         all_actions except: [:destroy]
         all_actions only: [:create, :read]
+        all_actions include_private?: true
         all_actions category: "ash.resource", tags: ["public-api"], vsn: "1.0.0"
         all_actions only: [:read], read_load: [:profile]
       end
+
+  `all_actions` uses Ash's public API boundary by default and expands only
+  actions with `public?: true`. Set `include_private?: true` only for trusted
+  internal tool catalogs.
 
   ## Action Options
 

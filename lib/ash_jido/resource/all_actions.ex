@@ -16,6 +16,7 @@ defmodule AshJido.Resource.AllActions do
     :signal_source,
     :__spark_metadata__,
     emit_signals?: false,
+    include_private?: false,
     telemetry?: false,
     read_query_params?: true
   ]
@@ -32,6 +33,7 @@ defmodule AshJido.Resource.AllActions do
           signal_type: String.t() | nil,
           signal_source: String.t() | nil,
           emit_signals?: boolean(),
+          include_private?: boolean(),
           telemetry?: boolean(),
           read_query_params?: boolean()
         }

@@ -95,6 +95,70 @@ defmodule AshJido.Resource.Transformers.GenerateJidoActionsTest do
     end
   end
 
+  defmodule ResourceWithPrivateAction do
+    use Ash.Resource,
+      domain: nil,
+      extensions: [AshJido],
+      data_layer: Ash.DataLayer.Ets
+
+    ets do
+      private?(true)
+    end
+
+    attributes do
+      uuid_primary_key(:id)
+      attribute(:name, :string, allow_nil?: false)
+    end
+
+    actions do
+      defaults([:read])
+
+      create :register do
+        accept([:name])
+      end
+
+      read :internal_lookup do
+        public?(false)
+      end
+    end
+
+    jido do
+      all_actions()
+    end
+  end
+
+  defmodule ResourceWithPrivateActionOptIn do
+    use Ash.Resource,
+      domain: nil,
+      extensions: [AshJido],
+      data_layer: Ash.DataLayer.Ets
+
+    ets do
+      private?(true)
+    end
+
+    attributes do
+      uuid_primary_key(:id)
+      attribute(:name, :string, allow_nil?: false)
+    end
+
+    actions do
+      defaults([:read])
+
+      create :register do
+        accept([:name])
+      end
+
+      read :internal_lookup do
+        public?(false)
+      end
+    end
+
+    jido do
+      all_actions(include_private?: true)
+    end
+  end
+
   describe "transform/1" do
     test "returns an error when load is configured on a non-read action" do
       unique_suffix = System.unique_integer([:positive])
@@ -279,6 +343,34 @@ defmodule AshJido.Resource.Transformers.GenerateJidoActionsTest do
       assert read_module.tags() == ["metadata"]
       assert register_module.vsn() == "3.0.0"
       assert read_module.vsn() == "3.0.0"
+    end
+
+    test "all_actions only expands public Ash actions by default" do
+      dsl_state = ResourceWithPrivateAction.spark_dsl_config()
+      {:ok, transformed_state} = GenerateJidoActions.transform(dsl_state)
+
+      generated_modules =
+        Spark.Dsl.Extension.get_persisted(transformed_state, :generated_jido_modules)
+
+      generated_names = Enum.map(generated_modules, & &1.name())
+
+      assert "create_resource_with_private_action" in generated_names
+      assert "list_resource_with_private_actions" in generated_names
+      refute "resource_with_private_action_internal_lookup" in generated_names
+      refute Enum.any?(generated_modules, &String.contains?(inspect(&1), "InternalLookup"))
+    end
+
+    test "all_actions can explicitly include private Ash actions" do
+      dsl_state = ResourceWithPrivateActionOptIn.spark_dsl_config()
+      {:ok, transformed_state} = GenerateJidoActions.transform(dsl_state)
+
+      generated_modules =
+        Spark.Dsl.Extension.get_persisted(transformed_state, :generated_jido_modules)
+
+      generated_module_names = Enum.map(generated_modules, &inspect/1)
+
+      assert Enum.any?(generated_module_names, &String.ends_with?(&1, ".Jido.Register"))
+      assert Enum.any?(generated_module_names, &String.ends_with?(&1, ".Jido.InternalLookup"))
     end
   end
 
