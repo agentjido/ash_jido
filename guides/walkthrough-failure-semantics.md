@@ -41,6 +41,9 @@ error.message # => "Update actions require an 'id' parameter"
 Resources with a non-`id` or composite primary key report the generated primary key
 fields instead, e.g. `"Update actions require primary key parameter(s): account_id, external_id"`.
 
+Destroy actions also validate declared Ash destroy action arguments, so missing or
+invalid destroy arguments surface as regular Ash/Jido validation errors.
+
 ### Missing `signal_dispatch` when signaling is enabled
 
 ```elixir

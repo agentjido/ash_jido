@@ -291,6 +291,7 @@ AshJido.Tools.tools(MyApp.Accounts.User)
 **`Update actions require primary key parameter(s): ...`**
 - Include the resource's primary key field or fields in params for `:update` and `:destroy` actions
 - Resources with the default `[:id]` primary key continue to use `id`
+- Destroy actions also include and pass through any declared Ash destroy action arguments
 
 **`Action X not found in resource`**
 - Check `jido action :...` entries match defined Ash actions

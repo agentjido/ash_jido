@@ -386,7 +386,7 @@ Each Ash action type maps to corresponding behavior:
 | `:create` | Creates a new record via `Ash.create!` |
 | `:read` | Queries records via `Ash.read!` |
 | `:update` | Updates a record using the resource primary key fields via `Ash.update!` |
-| `:destroy` | Deletes a record using the resource primary key fields via `Ash.destroy!` |
+| `:destroy` | Deletes a record using the resource primary key fields and declared destroy arguments via `Ash.destroy!` |
 | `:action` | Runs custom logic via `Ash.run_action!` |
 
 ## Complete Example

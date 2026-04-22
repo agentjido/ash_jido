@@ -81,6 +81,10 @@ defmodule AshJido.GeneratorTest do
       update :rename do
         accept([:name])
       end
+
+      destroy :delete_with_reason do
+        argument(:reason, :string, allow_nil?: false)
+      end
     end
   end
 
@@ -508,6 +512,72 @@ defmodule AshJido.GeneratorTest do
 
       assert jido_error.message ==
                "Update actions require primary key parameter(s): account_id, external_id"
+    end
+
+    test "destroy action schema includes declared action arguments" do
+      dsl_state = CustomPrimaryKeyResource.spark_dsl_config()
+
+      jido_action = %AshJido.Resource.JidoAction{
+        action: :delete_with_reason,
+        name: "delete_custom_primary_key_with_reason",
+        module_name: TestDestroyArgumentSchemaAction,
+        description: "Destroy custom primary key resource with reason",
+        output_map?: true
+      }
+
+      module_name =
+        AshJido.Generator.generate_jido_action_module(
+          CustomPrimaryKeyResource,
+          jido_action,
+          dsl_state
+        )
+
+      schema = module_name.schema()
+
+      assert Keyword.has_key?(schema, :slug)
+      assert Keyword.has_key?(schema, :reason)
+      assert schema[:slug][:required] == true
+      assert schema[:reason][:required] == true
+    end
+
+    test "destroy action passes declared arguments to Ash" do
+      slug = "destroy-arg-#{System.unique_integer([:positive])}"
+
+      CustomPrimaryKeyResource
+      |> Ash.Changeset.for_create(
+        :create,
+        %{slug: slug, name: "Destroy With Reason"},
+        domain: PrimaryKeyDomain
+      )
+      |> Ash.create!(domain: PrimaryKeyDomain)
+
+      dsl_state = CustomPrimaryKeyResource.spark_dsl_config()
+
+      jido_action = %AshJido.Resource.JidoAction{
+        action: :delete_with_reason,
+        name: "delete_custom_primary_key_with_reason_runtime",
+        module_name: TestDestroyArgumentRuntimeAction,
+        description: "Destroy custom primary key resource with reason",
+        output_map?: true
+      }
+
+      module_name =
+        AshJido.Generator.generate_jido_action_module(
+          CustomPrimaryKeyResource,
+          jido_action,
+          dsl_state
+        )
+
+      assert {:ok, %{deleted: true}} =
+               module_name.run(%{"slug" => slug, reason: "cleanup"}, %{domain: PrimaryKeyDomain})
+
+      assert {:ok, nil} =
+               Ash.get(
+                 CustomPrimaryKeyResource,
+                 slug,
+                 domain: PrimaryKeyDomain,
+                 not_found_error?: false
+               )
     end
   end
 
