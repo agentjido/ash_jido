@@ -79,7 +79,7 @@ defmodule AshJido.MixProject do
       {:git_ops, "~> 2.9", only: :dev, runtime: false},
       {:igniter, "~> 0.7", only: [:dev, :test]},
       {:picosat_elixir, "~> 0.2", only: [:dev, :test], runtime: false},
-      {:usage_rules, "~> 0.1", only: [:dev]}
+      {:usage_rules, "~> 1.2", only: [:dev]}
     ]
   end
 
