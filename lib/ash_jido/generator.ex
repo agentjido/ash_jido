@@ -209,6 +209,7 @@ defmodule AshJido.Generator do
 
               :destroy ->
                 primary_key = fetch_primary_key!(params, :destroy)
+                destroy_params = drop_primary_key_params(params)
 
                 # Load the record first
                 record =
@@ -217,7 +218,7 @@ defmodule AshJido.Generator do
 
                 destroy_result =
                   record
-                  |> Ash.Changeset.for_destroy(@ash_action, %{}, ash_opts)
+                  |> Ash.Changeset.for_destroy(@ash_action, destroy_params, ash_opts)
                   |> Ash.destroy!(maybe_add_notification_collection(ash_opts, @jido_config, :destroy))
 
                 notifications = maybe_extract_destroy_notifications(destroy_result)
@@ -562,8 +563,10 @@ defmodule AshJido.Generator do
         base ++ accepted_attrs ++ action_args
 
       :destroy ->
-        # Destroy actions need primary key fields
-        primary_key_to_schema(dsl_state, :destroy)
+        # Destroy actions need primary key fields plus action arguments
+        base = primary_key_to_schema(dsl_state, :destroy)
+        action_args = action_args_to_schema(ash_action.arguments || [])
+        base ++ action_args
 
       _ ->
         # Read and custom actions use their declared arguments
