@@ -135,6 +135,12 @@ jido do
 end
 ```
 
+Default generated module names are based on the Ash action name, e.g.
+`action :create` generates `Resource.Jido.Create` even when `name:` is set.
+Use `module_name:` to intentionally choose a different generated module, and
+provide explicit `module_name:` values when exposing the same Ash action more
+than once.
+
 ### Bulk Exposure
 
 ```elixir

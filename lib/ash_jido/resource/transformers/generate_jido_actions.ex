@@ -114,8 +114,42 @@ defmodule AshJido.Resource.Transformers.GenerateJidoActions do
   defp filter_actions(ash_actions, _), do: ash_actions
 
   defp generate_jido_actions(resource, jido_actions, dsl_state) do
+    validate_unique_module_names!(resource, jido_actions, dsl_state)
+
     Enum.map(jido_actions, fn jido_action ->
       Generator.generate_jido_action_module(resource, jido_action, dsl_state)
     end)
+  end
+
+  defp validate_unique_module_names!(resource, jido_actions, dsl_state) do
+    duplicate =
+      jido_actions
+      |> Enum.map(fn jido_action ->
+        {Generator.target_module_name(resource, jido_action, dsl_state), jido_action}
+      end)
+      |> Enum.group_by(
+        fn {module_name, _} -> module_name end,
+        fn {_, jido_action} -> jido_action end
+      )
+      |> Enum.find(fn
+        {_, [_, _ | _]} -> true
+        _ -> false
+      end)
+
+    case duplicate do
+      nil ->
+        :ok
+
+      {module_name, entries} ->
+        descriptions =
+          Enum.map_join(entries, ", ", fn entry ->
+            "action: #{inspect(entry.action)}, name: #{inspect(entry.name)}"
+          end)
+
+        raise ArgumentError,
+              "AshJido: multiple `jido` entries on #{inspect(resource)} resolve to the same " <>
+                "generated module #{inspect(module_name)} (#{descriptions}). " <>
+                "Give each colliding entry an explicit `module_name:`."
+    end
   end
 end
