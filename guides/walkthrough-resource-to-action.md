@@ -148,6 +148,7 @@ Notes:
 ## 4. Rules to Remember
 
 - Update and destroy generated actions require the resource primary key field or fields in params.
+- Destroy generated actions also accept declared Ash destroy action arguments.
 - `load` is static DSL configuration for read actions only.
 - `output_map?: true` (default) returns maps instead of Ash structs.
 
