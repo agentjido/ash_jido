@@ -5,6 +5,44 @@ defmodule AshJido.QueryParamsTest do
   use ExUnit.Case, async: false
   @moduletag :capture_log
 
+  describe "query parameter helpers" do
+    test "normalizes string query parameter keys" do
+      assert AshJido.QueryParams.normalize_keys(%{
+               "filter" => %{"name" => "Alice"},
+               "limit" => 1,
+               name: "kept"
+             }) == %{
+               filter: %{"name" => "Alice"},
+               limit: 1,
+               name: "kept"
+             }
+    end
+
+    test "keeps atom query parameter values when atom and string keys both exist" do
+      assert AshJido.QueryParams.normalize_keys(%{
+               "filter" => %{name: "Bob"},
+               filter: %{name: "Alice"}
+             }) == %{filter: %{name: "Alice"}}
+    end
+
+    test "splits query params from action params and enforces max page size" do
+      config = %AshJido.Resource.JidoAction{query_params?: true, max_page_size: 2}
+
+      assert {%{filter: %{name: "Alice"}, limit: 2}, %{name: "Action Arg"}} =
+               AshJido.QueryParams.split(
+                 %{filter: %{name: "Alice"}, limit: 10, sort: nil, name: "Action Arg"},
+                 config
+               )
+    end
+
+    test "leaves params untouched when query params are disabled" do
+      config = %AshJido.Resource.JidoAction{query_params?: false}
+      params = %{filter: %{name: "Alice"}, name: "Action Arg"}
+
+      assert {%{}, ^params} = AshJido.QueryParams.split(params, config)
+    end
+  end
+
   describe "schema generation" do
     test "read actions include query params in schema by default" do
       # AshJido.Test.User has `action(:read)` in its jido section
