@@ -7,6 +7,8 @@ defmodule AshJido.Resource.Dsl do
   @publish_action_types [:create, :update, :destroy, :action]
   @include_modes [:pkey_only, :all, :changes_only]
 
+  @doc false
+  @spec jido_section() :: struct()
   def jido_section do
     %Spark.Dsl.Section{
       name: :jido,
@@ -89,8 +91,7 @@ defmodule AshJido.Resource.Dsl do
         ],
         description: [
           type: :string,
-          doc:
-            "Description for the Jido action. Inherits from Ash action description if available"
+          doc: "Description for the Jido action. Inherits from Ash action description if available"
         ],
         category: [
           type: :string,
@@ -121,8 +122,7 @@ defmodule AshJido.Resource.Dsl do
         ],
         signal_dispatch: [
           type: :any,
-          doc:
-            "Default dispatch configuration for emitted signals (override with context[:signal_dispatch])"
+          doc: "Default dispatch configuration for emitted signals (override with context[:signal_dispatch])"
         ],
         signal_type: [
           type: :string,
@@ -149,8 +149,7 @@ defmodule AshJido.Resource.Dsl do
         max_page_size: [
           type: :pos_integer,
           required: false,
-          doc:
-            "Maximum page size (limit) for this action. Used to enforce query bounds at runtime."
+          doc: "Maximum page size (limit) for this action. Used to enforce query bounds at runtime."
         ]
       ]
     }
@@ -189,8 +188,7 @@ defmodule AshJido.Resource.Dsl do
         ],
         category: [
           type: :string,
-          doc:
-            "Category override applied to generated actions. Defaults to ash.<action_type> when omitted"
+          doc: "Category override applied to generated actions. Defaults to ash.<action_type> when omitted"
         ],
         tags: [
           type: {:list, :string},
@@ -208,13 +206,11 @@ defmodule AshJido.Resource.Dsl do
         emit_signals?: [
           type: :boolean,
           default: false,
-          doc:
-            "Emit Jido signals from Ash notifications for generated create/update/destroy actions"
+          doc: "Emit Jido signals from Ash notifications for generated create/update/destroy actions"
         ],
         signal_dispatch: [
           type: :any,
-          doc:
-            "Default dispatch configuration for emitted signals (override with context[:signal_dispatch])"
+          doc: "Default dispatch configuration for emitted signals (override with context[:signal_dispatch])"
         ],
         signal_type: [
           type: :string,
@@ -266,8 +262,7 @@ defmodule AshJido.Resource.Dsl do
         signal_type: [
           type: :string,
           required: false,
-          doc:
-            "Explicit signal type. If omitted, AshJido derives one as `{prefix}.{resource}.{action}`."
+          doc: "Explicit signal type. If omitted, AshJido derives one as `{prefix}.{resource}.{action}`."
         ],
         include: [
           type: {:or, [{:in, @include_modes}, {:list, :atom}]},

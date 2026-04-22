@@ -1,14 +1,20 @@
 defmodule Mix.Tasks.AshJido.Install.Docs do
   @moduledoc false
 
+  @doc false
+  @spec short_doc() :: String.t()
   def short_doc do
     "Installs AshJido. Requires igniter to run."
   end
 
+  @doc false
+  @spec example() :: String.t()
   def example do
     "mix igniter.install ash_jido"
   end
 
+  @doc false
+  @spec long_doc() :: String.t()
   def long_doc do
     """
     #{short_doc()}

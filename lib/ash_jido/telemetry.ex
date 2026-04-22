@@ -7,6 +7,7 @@ defmodule AshJido.Telemetry do
 
   @type span_state :: %{metadata: map(), start_mono: integer()} | nil
 
+  @doc false
   @spec start(struct(), map()) :: span_state()
   def start(%{telemetry?: true}, metadata) do
     :telemetry.execute(
@@ -23,6 +24,7 @@ defmodule AshJido.Telemetry do
 
   def start(_config, _metadata), do: nil
 
+  @doc false
   @spec stop(span_state(), term(), map()) :: :ok
   def stop(nil, _result, _signal_meta), do: :ok
 
@@ -39,6 +41,7 @@ defmodule AshJido.Telemetry do
     )
   end
 
+  @doc false
   @spec exception(span_state(), atom(), term(), list(), map()) :: :ok
   def exception(nil, _kind, _reason, _stacktrace, _signal_meta), do: :ok
 

@@ -138,9 +138,7 @@ defmodule AshJido.Generator do
                 create_result =
                   @resource
                   |> Ash.Changeset.for_create(@ash_action, params, ash_opts)
-                  |> Ash.create!(
-                    maybe_add_notification_collection(ash_opts, @jido_config, :create)
-                  )
+                  |> Ash.create!(maybe_add_notification_collection(ash_opts, @jido_config, :create))
 
                 {result, notifications} = maybe_extract_result_and_notifications(create_result)
 
@@ -197,9 +195,7 @@ defmodule AshJido.Generator do
                 update_result =
                   record
                   |> Ash.Changeset.for_update(@ash_action, update_params, ash_opts)
-                  |> Ash.update!(
-                    maybe_add_notification_collection(ash_opts, @jido_config, :update)
-                  )
+                  |> Ash.update!(maybe_add_notification_collection(ash_opts, @jido_config, :update))
 
                 {result, notifications} = maybe_extract_result_and_notifications(update_result)
 
@@ -232,9 +228,7 @@ defmodule AshJido.Generator do
                 destroy_result =
                   record
                   |> Ash.Changeset.for_destroy(@ash_action, %{}, ash_opts)
-                  |> Ash.destroy!(
-                    maybe_add_notification_collection(ash_opts, @jido_config, :destroy)
-                  )
+                  |> Ash.destroy!(maybe_add_notification_collection(ash_opts, @jido_config, :destroy))
 
                 notifications = maybe_extract_destroy_notifications(destroy_result)
 

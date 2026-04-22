@@ -164,8 +164,6 @@ defmodule AshJido.SensorDispatchBridgeTest do
   end
 
   defp start_sensor_runtime(agent_ref) do
-    start_supervised!(
-      {Jido.Sensor.Runtime, sensor: EchoSensor, config: %{}, context: %{agent_ref: agent_ref}}
-    )
+    start_supervised!({Jido.Sensor.Runtime, sensor: EchoSensor, config: %{}, context: %{agent_ref: agent_ref}})
   end
 end
