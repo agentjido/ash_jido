@@ -59,8 +59,8 @@ defmodule AshJido.QueryParamsTest do
     end
 
     test "read actions with arguments include both args and query params" do
-      # AshJido.Test.User.Jido.FindUserByEmail has an :email argument
-      schema = AshJido.Test.User.Jido.FindUserByEmail.schema()
+      # AshJido.Test.User.Jido.ByEmail has an :email argument
+      schema = AshJido.Test.User.Jido.ByEmail.schema()
 
       # Action argument
       assert Keyword.has_key?(schema, :email)

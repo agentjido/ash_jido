@@ -146,7 +146,7 @@ defmodule AshJido.Resource.Transformers.GenerateJidoActions do
         raise ArgumentError,
               "AshJido: multiple `jido` entries on #{inspect(resource)} resolve to the same " <>
                 "generated module #{inspect(module_name)} (#{descriptions}). " <>
-                "Give each entry a distinct `name:` or an explicit `module_name:`."
+                "Give each colliding entry an explicit `module_name:`."
     end
   end
 end

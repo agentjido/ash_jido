@@ -51,15 +51,9 @@ defmodule AshJido.Generator do
   defp build_module_name(resource, jido_action, ash_action) do
     case jido_action.module_name do
       nil ->
-        # Derive from the Jido entry's `name:` when present so multiple
-        # entries on the same Ash action can produce distinct modules.
-        # Fall back to the Ash action name when `name:` is unset.
-        segment =
-          (jido_action.name || to_string(ash_action.name))
-          |> to_string()
-          |> Macro.camelize()
+        action_name = ash_action.name |> to_string() |> Macro.camelize()
 
-        Module.concat([resource, "Jido", segment])
+        Module.concat([resource, "Jido", action_name])
 
       custom_module_name ->
         # Use the custom module name provided in DSL

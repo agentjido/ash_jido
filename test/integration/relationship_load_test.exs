@@ -107,14 +107,12 @@ defmodule AshJido.RelationshipLoadTest do
         |> Ash.create!(domain: Domain)
 
       {:ok, _article} =
-        ArticleWithActionLoad.Jido.CreateArticleActionLoad.run(
+        ArticleWithActionLoad.Jido.Create.run(
           %{title: "Action Load", author_id: author.id},
           %{domain: Domain}
         )
 
-      {:ok, %{result: articles}} =
-        ArticleWithActionLoad.Jido.ListArticlesActionLoad.run(%{}, %{domain: Domain})
-
+      {:ok, %{result: articles}} = ArticleWithActionLoad.Jido.Read.run(%{}, %{domain: Domain})
       article = Enum.find(articles, &(&1[:title] == "Action Load"))
 
       assert is_map(article)

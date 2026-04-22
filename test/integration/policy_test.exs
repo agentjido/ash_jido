@@ -12,7 +12,7 @@ defmodule AshJido.PolicyTest do
       params = %{title: "Bypassed Policy"}
       context = %{domain: Domain, actor: nil, authorize?: false}
 
-      result = ProtectedResource.Jido.CreateProtected.run(params, context)
+      result = ProtectedResource.Jido.Create.run(params, context)
 
       assert {:ok, resource} = result
       assert resource[:title] == "Bypassed Policy"
@@ -22,7 +22,7 @@ defmodule AshJido.PolicyTest do
       params = %{title: "Secret Document"}
       context = %{domain: Domain, actor: nil}
 
-      result = ProtectedResource.Jido.CreateProtected.run(params, context)
+      result = ProtectedResource.Jido.Create.run(params, context)
 
       assert {:error, error} = result
       assert error.details.reason == :forbidden
@@ -33,7 +33,7 @@ defmodule AshJido.PolicyTest do
       params = %{title: "Secret Document", owner_id: actor.id}
       context = %{domain: Domain, actor: actor}
 
-      result = ProtectedResource.Jido.CreateProtected.run(params, context)
+      result = ProtectedResource.Jido.Create.run(params, context)
 
       assert {:ok, resource} = result
       assert resource[:title] == "Secret Document"
@@ -44,7 +44,7 @@ defmodule AshJido.PolicyTest do
       params = %{title: "Scoped Secret", owner_id: actor.id}
       context = %{domain: Domain, scope: %{actor: actor}}
 
-      result = ProtectedResource.Jido.CreateProtected.run(params, context)
+      result = ProtectedResource.Jido.Create.run(params, context)
 
       assert {:ok, resource} = result
       assert resource[:title] == "Scoped Secret"
@@ -55,7 +55,7 @@ defmodule AshJido.PolicyTest do
       params = %{title: "Scoped Secret"}
       context = %{domain: Domain, scope: %{actor: actor}, actor: nil}
 
-      result = ProtectedResource.Jido.CreateProtected.run(params, context)
+      result = ProtectedResource.Jido.Create.run(params, context)
 
       assert {:error, error} = result
       assert error.details.reason == :forbidden
@@ -64,7 +64,7 @@ defmodule AshJido.PolicyTest do
     test "read action succeeds without actor when policy allows always" do
       context = %{domain: Domain, actor: nil}
 
-      result = ProtectedResource.Jido.ListProtected.run(%{}, context)
+      result = ProtectedResource.Jido.Read.run(%{}, context)
 
       assert {:ok, _resources} = result
     end
@@ -73,11 +73,10 @@ defmodule AshJido.PolicyTest do
       actor = %{id: "user_123", name: "Test User"}
       create_context = %{domain: Domain, actor: actor}
 
-      {:ok, resource} =
-        ProtectedResource.Jido.CreateProtected.run(%{title: "To Delete"}, create_context)
+      {:ok, resource} = ProtectedResource.Jido.Create.run(%{title: "To Delete"}, create_context)
 
       destroy_context = %{domain: Domain, actor: nil}
-      result = ProtectedResource.Jido.DeleteProtected.run(%{id: resource[:id]}, destroy_context)
+      result = ProtectedResource.Jido.Destroy.run(%{id: resource[:id]}, destroy_context)
 
       assert {:error, error} = result
       assert error.details.reason == :forbidden

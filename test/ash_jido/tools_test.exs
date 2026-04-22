@@ -9,7 +9,7 @@ defmodule AshJido.ToolsTest do
 
       assert User.Jido.Register in actions
       assert User.Jido.Read in actions
-      assert User.Jido.DeactivateUser in actions
+      assert User.Jido.Deactivate in actions
     end
 
     test "returns generated action modules for a domain" do
@@ -18,7 +18,7 @@ defmodule AshJido.ToolsTest do
       assert User.Jido.Register in actions
       assert User.Jido.Read in actions
       assert Post.Jido.Create in actions
-      assert Post.Jido.PublishPost in actions
+      assert Post.Jido.Publish in actions
     end
 
     test "returns an empty list for non-ash modules" do
