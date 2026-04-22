@@ -89,11 +89,21 @@ This generates Jido.Action modules for each exposed action:
 
 ## Exposing All Actions
 
-Use `all_actions` to quickly expose all actions on a resource with smart defaults:
+Use `all_actions` to quickly expose all public Ash actions on a resource with smart defaults:
 
 ```elixir
 jido do
   all_actions
+end
+```
+
+`all_actions` uses Ash's public API boundary and skips actions with
+`public?: false` by default. Use explicit `action :name` entries for deliberate
+per-action exposure, or opt into a trusted/internal catalog:
+
+```elixir
+jido do
+  all_actions include_private?: true
 end
 ```
 
@@ -208,6 +218,7 @@ Each action in the `jido` section supports these options:
 - `read_load` for static read relationship loading
 - `read_query_params?` to enable/disable query parameters for read actions
 - `read_max_page_size` to set maximum page size for read actions
+- `include_private?` to include Ash actions with `public?: false` in trusted/internal catalogs
 - `category` (default `ash.<action_type>`)
 - `tags`
 - `vsn`

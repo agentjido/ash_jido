@@ -161,8 +161,8 @@ defmodule AshJido.Resource.Dsl do
       describe: """
       Expose all Ash actions as Jido actions with smart defaults.
 
-      This creates Jido actions for all create, read, update, destroy, and custom actions
-      defined on the resource, using intelligent naming and categorization.
+      This creates Jido actions for public create, read, update, destroy, and custom
+      actions defined on the resource, using intelligent naming and categorization.
 
       ## Usage
 
@@ -185,6 +185,11 @@ defmodule AshJido.Resource.Dsl do
         only: [
           type: {:list, :atom},
           doc: "If specified, only generate actions for these action names"
+        ],
+        include_private?: [
+          type: :boolean,
+          default: false,
+          doc: "Include actions with `public?: false`. Intended only for trusted/internal tool catalogs."
         ],
         category: [
           type: :string,

@@ -43,6 +43,7 @@ defmodule AshJido.ResourceTest do
       assert all_actions.category == nil
       assert all_actions.tags == nil
       assert all_actions.vsn == nil
+      assert all_actions.include_private? == false
     end
   end
 end
