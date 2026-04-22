@@ -288,8 +288,9 @@ AshJido.Tools.tools(MyApp.Accounts.User)
 **`AshJido: :domain must be provided in context`**
 - Pass `%{domain: MyApp.Domain}` as the second argument to `run/2`, or configure `domain: MyApp.Domain` on the Ash resource
 
-**`Update actions require an 'id' parameter`**
-- Include `id` in params for `:update` and `:destroy` actions
+**`Update actions require primary key parameter(s): ...`**
+- Include the resource's primary key field or fields in params for `:update` and `:destroy` actions
+- Resources with the default `[:id]` primary key continue to use `id`
 
 **`Action X not found in resource`**
 - Check `jido action :...` entries match defined Ash actions

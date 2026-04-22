@@ -26,17 +26,20 @@ assert_raise ArgumentError, ~r/:domain must be provided/, fn ->
 end
 ```
 
-### Missing `id` for update/destroy
+### Missing primary key for update/destroy
 
 ```elixir
 assert {:error, %Jido.Action.Error.ExecutionFailureError{} = error} =
   MyApp.Content.Post.Jido.Update.run(
-    %{title: "missing id"},
+    %{title: "missing primary key"},
     %{domain: MyApp.Content}
   )
 
 error.message # => "Update actions require an 'id' parameter"
 ```
+
+Resources with a non-`id` or composite primary key report the generated primary key
+fields instead, e.g. `"Update actions require primary key parameter(s): account_id, external_id"`.
 
 ### Missing `signal_dispatch` when signaling is enabled
 
