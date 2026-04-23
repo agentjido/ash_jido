@@ -33,7 +33,7 @@ defmodule AshJido.SignalFactory do
     publication = %Publication{
       actions: [notification.action.name],
       signal_type: Map.get(signal_config, :signal_type),
-      include: :all,
+      include: Map.get(signal_config, :signal_include, :pkey_only) || :pkey_only,
       metadata: []
     }
 

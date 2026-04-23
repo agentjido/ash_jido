@@ -45,6 +45,15 @@ defmodule AshJido.SignalFactoryTest do
       refute Map.has_key?(signal.data, :secret)
     end
 
+    test "pkey_only handles nil notification data" do
+      notification = build_notification(:create, nil)
+      publication = %Publication{actions: [:create], include: :pkey_only, metadata: []}
+
+      assert {:ok, signal} = SignalFactory.from_notification(notification, publication)
+      assert signal.data == %{}
+      assert signal.subject == nil
+    end
+
     test "all includes attributes explicitly set to nil" do
       notification =
         build_notification(
@@ -133,6 +142,20 @@ defmodule AshJido.SignalFactoryTest do
       assert signal_metadata(signal).actor_id == "user-456"
     end
 
+    test "includes string-key actor ids when :actor in metadata" do
+      notification =
+        build_notification(
+          :create,
+          base_record(%{id: "123"}),
+          actor: %{"id" => "user-789"}
+        )
+
+      publication = %Publication{actions: [:create], include: :pkey_only, metadata: [:actor]}
+
+      assert {:ok, signal} = SignalFactory.from_notification(notification, publication)
+      assert signal_metadata(signal).actor_id == "user-789"
+    end
+
     test "includes tenant when :tenant in metadata" do
       changeset =
         Ash.Changeset.for_create(
@@ -163,6 +186,19 @@ defmodule AshJido.SignalFactoryTest do
       assert signal.source == "/ash/reactive_resource/create/create"
     end
 
+    test "includes previous state metadata when requested" do
+      previous = base_record(%{id: "123", name: "Before"})
+      changeset = Ash.Changeset.for_update(previous, :update, %{name: "After"})
+      updated = base_record(%{id: "123", name: "After"})
+      notification = build_notification(:update, updated, changeset: changeset)
+
+      publication =
+        %Publication{actions: [:update], include: :pkey_only, metadata: [:previous_state]}
+
+      assert {:ok, signal} = SignalFactory.from_notification(notification, publication)
+      assert signal_metadata(signal).previous_state.name == "Before"
+    end
+
     test "subject identifies specific record" do
       notification = build_notification(:create, base_record(%{id: "abc-123"}))
       publication = %Publication{actions: [:create], include: :pkey_only, metadata: []}
@@ -171,7 +207,7 @@ defmodule AshJido.SignalFactoryTest do
       assert signal.subject == "/reactive_resource/abc-123"
     end
 
-    test "generated-action config uses the same canonical notification payload" do
+    test "generated-action config defaults to primary-key-only payloads" do
       notification = build_notification(:create, base_record(%{id: "123", name: "Generated"}))
 
       jido_action = %AshJido.Resource.JidoAction{
@@ -184,8 +220,22 @@ defmodule AshJido.SignalFactoryTest do
       assert signal.type == "test.reactive_resource.create"
       assert signal.source == "/ash/reactive_resource/create/create"
       assert signal.subject == "/reactive_resource/123"
-      assert signal.data.name == "Generated"
+      assert signal.data == %{id: "123"}
       assert signal_metadata(signal).ash_action == :create
+    end
+
+    test "generated-action config can explicitly widen signal payloads" do
+      notification = build_notification(:create, base_record(%{id: "123", name: "Generated"}))
+
+      jido_action = %AshJido.Resource.JidoAction{
+        action: :create,
+        signal_include: [:id, :name],
+        signal_type: nil,
+        signal_source: nil
+      }
+
+      assert {:ok, signal} = SignalFactory.from_notification(notification, jido_action)
+      assert signal.data == %{id: "123", name: "Generated"}
     end
 
     test "generated-action config can override signal type and source" do

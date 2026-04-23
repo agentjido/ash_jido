@@ -121,6 +121,11 @@ defmodule AshJido.Resource.Dsl do
           type: :any,
           doc: "Static Ash.Query.load statement to apply to generated read actions"
         ],
+        allowed_loads: [
+          type: :any,
+          doc:
+            "Allowed dynamic Ash.Query.load entries for read actions. When omitted, callers cannot pass a runtime `load` query parameter."
+        ],
         emit_signals?: [
           type: :boolean,
           default: false,
@@ -137,6 +142,12 @@ defmodule AshJido.Resource.Dsl do
         signal_source: [
           type: :string,
           doc: "Override the emitted signal source"
+        ],
+        signal_include: [
+          type: {:or, [{:in, @include_modes}, {:list, :atom}]},
+          required: false,
+          default: :pkey_only,
+          doc: "Data inclusion mode for signals emitted directly by generated Jido actions."
         ],
         telemetry?: [
           type: :boolean,
@@ -214,6 +225,11 @@ defmodule AshJido.Resource.Dsl do
           type: :any,
           doc: "Static Ash.Query.load statement applied to all auto-generated read actions"
         ],
+        read_allowed_loads: [
+          type: :any,
+          doc:
+            "Allowed dynamic Ash.Query.load entries for all auto-generated read actions. When omitted, callers cannot pass a runtime `load` query parameter."
+        ],
         emit_signals?: [
           type: :boolean,
           default: false,
@@ -230,6 +246,12 @@ defmodule AshJido.Resource.Dsl do
         signal_source: [
           type: :string,
           doc: "Override emitted signal source for generated actions"
+        ],
+        signal_include: [
+          type: {:or, [{:in, @include_modes}, {:list, :atom}]},
+          required: false,
+          default: :pkey_only,
+          doc: "Data inclusion mode for signals emitted directly by generated Jido actions."
         ],
         telemetry?: [
           type: :boolean,

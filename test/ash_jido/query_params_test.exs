@@ -41,10 +41,67 @@ defmodule AshJido.QueryParamsTest do
 
       assert {%{}, ^params} = AshJido.QueryParams.split(params, config)
     end
+
+    test "keeps dynamic load as an action param without an allowlist" do
+      config = %AshJido.Resource.JidoAction{query_params?: true}
+      params = %{load: [:author], name: "Action Arg"}
+
+      assert {%{}, ^params} = AshJido.QueryParams.split(params, config)
+    end
+
+    test "extracts dynamic load when an allowlist is configured" do
+      config = %AshJido.Resource.JidoAction{query_params?: true, allowed_loads: [:author]}
+
+      assert {%{load: ["author"]}, %{}} =
+               %{"load" => ["author"]}
+               |> AshJido.QueryParams.normalize_keys()
+               |> AshJido.QueryParams.split(config)
+    end
+
+    test "applies nested dynamic loads only when nested paths are allowlisted" do
+      query =
+        Ash.Query.for_read(
+          AshJido.Test.User,
+          :read,
+          %{},
+          domain: AshJido.Test.Domain
+        )
+
+      config = %AshJido.Resource.JidoAction{
+        query_params?: true,
+        allowed_loads: [profile: [:account]]
+      }
+
+      assert %Ash.Query{} =
+               AshJido.QueryParams.apply_to_query(
+                 query,
+                 %{load: [%{"profile" => ["account"]}]},
+                 config
+               )
+    end
+
+    test "raises for dynamic load paths outside the allowlist" do
+      query =
+        Ash.Query.for_read(
+          AshJido.Test.User,
+          :read,
+          %{},
+          domain: AshJido.Test.Domain
+        )
+
+      config = %AshJido.Resource.JidoAction{
+        query_params?: true,
+        allowed_loads: [profile: [:account]]
+      }
+
+      assert_raise ArgumentError, ~r/profile.secret/, fn ->
+        AshJido.QueryParams.apply_to_query(query, %{load: [profile: [:secret]]}, config)
+      end
+    end
   end
 
   describe "schema generation" do
-    test "read actions include query params in schema by default" do
+    test "read actions include safe query params in schema by default" do
       # AshJido.Test.User has `action(:read)` in its jido section
       # The generated module is AshJido.Test.User.Jido.Read
       module = AshJido.Test.User.Jido.Read
@@ -54,7 +111,7 @@ defmodule AshJido.QueryParamsTest do
       assert Keyword.has_key?(schema, :sort)
       assert Keyword.has_key?(schema, :limit)
       assert Keyword.has_key?(schema, :offset)
-      assert Keyword.has_key?(schema, :load)
+      refute Keyword.has_key?(schema, :load)
     end
 
     test "query param schema entries have correct types" do
@@ -72,7 +129,6 @@ defmodule AshJido.QueryParamsTest do
       refute schema[:sort][:required]
       refute schema[:limit][:required]
       refute schema[:offset][:required]
-      refute schema[:load][:required]
     end
 
     test "query param docs are present" do
@@ -82,7 +138,18 @@ defmodule AshJido.QueryParamsTest do
       assert is_binary(schema[:sort][:doc])
       assert is_binary(schema[:limit][:doc])
       assert is_binary(schema[:offset][:doc])
-      assert is_binary(schema[:load][:doc])
+    end
+
+    test "read actions include load in schema when dynamic loads are allowlisted" do
+      schema =
+        AshJido.QueryParams.schema(%AshJido.Resource.JidoAction{
+          query_params?: true,
+          allowed_loads: [:author]
+        })
+
+      assert Keyword.has_key?(schema, :load)
+      refute schema[:load][:required]
+      assert schema[:load][:doc] =~ "allowed_loads"
     end
 
     test "non-read actions do NOT include query params" do

@@ -39,12 +39,13 @@ defmodule AshJidoConsumer.Content.Post do
     action(:create,
       emit_signals?: true,
       telemetry?: true,
+      signal_include: [:id, :title],
       signal_type: "ash_jido_consumer.content.post.created",
       signal_source: "/ash_jido_consumer/content/post"
     )
 
     action(:read, load: [:author], telemetry?: true)
-    action(:update, emit_signals?: true, telemetry?: true)
+    action(:update, emit_signals?: true, telemetry?: true, signal_include: [:id, :title])
     action(:destroy, emit_signals?: true, telemetry?: true)
   end
 end

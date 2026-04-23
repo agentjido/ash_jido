@@ -12,7 +12,7 @@ defmodule AshJido.RelationshipLoadTest do
 
     attributes do
       uuid_primary_key(:id)
-      attribute(:name, :string, allow_nil?: false)
+      attribute(:name, :string, allow_nil?: false, public?: true)
     end
 
     actions do
@@ -36,7 +36,7 @@ defmodule AshJido.RelationshipLoadTest do
 
     attributes do
       uuid_primary_key(:id)
-      attribute(:title, :string, allow_nil?: false)
+      attribute(:title, :string, allow_nil?: false, public?: true)
     end
 
     relationships do
@@ -54,6 +54,12 @@ defmodule AshJido.RelationshipLoadTest do
     jido do
       action(:create, name: "create_article_action_load")
       action(:read, name: "list_articles_action_load", load: [:author])
+
+      action(:read,
+        name: "list_articles_dynamic_load",
+        module_name: AshJido.RelationshipLoadTest.ArticleWithDynamicLoad,
+        allowed_loads: [:author]
+      )
     end
   end
 
@@ -69,7 +75,7 @@ defmodule AshJido.RelationshipLoadTest do
 
     attributes do
       uuid_primary_key(:id)
-      attribute(:title, :string, allow_nil?: false)
+      attribute(:title, :string, allow_nil?: false, public?: true)
     end
 
     relationships do
@@ -118,6 +124,39 @@ defmodule AshJido.RelationshipLoadTest do
       assert is_map(article)
       assert article[:author][:id] == author.id
       assert article[:author][:name] == "Ada"
+    end
+
+    test "dynamic read load is constrained to allowlisted relationships" do
+      author =
+        Author
+        |> Ash.Changeset.for_create(:create, %{name: "Katherine"}, domain: Domain)
+        |> Ash.create!(domain: Domain)
+
+      {:ok, _article} =
+        ArticleWithActionLoad.Jido.Create.run(
+          %{title: "Dynamic Load", author_id: author.id},
+          %{domain: Domain}
+        )
+
+      {:ok, %{result: articles}} =
+        AshJido.RelationshipLoadTest.ArticleWithDynamicLoad.run(
+          %{"load" => ["author"]},
+          %{domain: Domain}
+        )
+
+      article = Enum.find(articles, &(&1[:title] == "Dynamic Load"))
+
+      assert article[:author][:id] == author.id
+      assert article[:author][:name] == "Katherine"
+
+      assert {:error, error} =
+               AshJido.RelationshipLoadTest.ArticleWithDynamicLoad.run(
+                 %{load: [:not_allowed]},
+                 %{domain: Domain}
+               )
+
+      assert error.message =~ "dynamic load"
+      assert error.message =~ "not_allowed"
     end
 
     test "all_actions read_load applies static relationship load to generated read action" do

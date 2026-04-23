@@ -75,6 +75,7 @@ defmodule AshJido.GuideExamplesTest do
         vsn: "1.0.0",
         emit_signals?: true,
         signal_dispatch: {:noop, []},
+        signal_include: [:id, :title],
         telemetry?: true
       )
 

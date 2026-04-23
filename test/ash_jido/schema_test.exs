@@ -90,6 +90,18 @@ defmodule AshJido.SchemaTest do
       assert Keyword.has_key?(schema, :public_name)
       assert schema[:limit][:doc] =~ "Maximum: 10."
       assert schema[:filter][:type] == :any
+      refute Keyword.has_key?(schema, :load)
+    end
+
+    test "adds dynamic load schema only when read allowed_loads are configured" do
+      schema =
+        Schema.build_parameter_schema(
+          ash_action(:by_name),
+          %JidoAction{action: :by_name, query_params?: true, allowed_loads: [:profile]},
+          dsl_state()
+        )
+
+      assert schema[:load][:type] == :any
     end
   end
 

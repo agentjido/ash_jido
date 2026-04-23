@@ -97,7 +97,7 @@ defmodule AshJido.Runtime do
       spec.resource
       |> Ash.Query.for_read(spec.action_name, action_params, ash_opts)
       |> maybe_load(spec.config)
-      |> AshJido.QueryParams.apply_to_query(query_opts)
+      |> AshJido.QueryParams.apply_to_query(query_opts, spec.config)
 
     result = Ash.read!(query, ash_opts)
 
@@ -111,7 +111,7 @@ defmodule AshJido.Runtime do
 
     record =
       spec.resource
-      |> Ash.get!(primary_key, ash_opts)
+      |> fetch_for_write!(primary_key, ash_opts)
 
     update_result =
       record
@@ -133,7 +133,7 @@ defmodule AshJido.Runtime do
 
     record =
       spec.resource
-      |> Ash.get!(primary_key, ash_opts)
+      |> fetch_for_write!(primary_key, ash_opts)
 
     destroy_result =
       record
@@ -189,6 +189,10 @@ defmodule AshJido.Runtime do
       {:ok, value} -> value
       :error -> Map.get(params, to_string(key))
     end
+  end
+
+  defp fetch_for_write!(resource, primary_key, ash_opts) do
+    Ash.get!(resource, primary_key, Keyword.put(ash_opts, :authorize?, false))
   end
 
   defp missing_primary_key_message(action_type, primary_key) do

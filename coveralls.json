@@ -1,0 +1,9 @@
+{
+  "skip_files": [
+    "deps/.*",
+    "test/support/.*"
+  ],
+  "coverage_options": {
+    "minimum_coverage": 90
+  }
+}

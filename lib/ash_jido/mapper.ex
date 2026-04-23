@@ -75,6 +75,27 @@ defmodule AshJido.Mapper do
     Enum.map(data, &convert_to_maps/1)
   end
 
+  defp convert_to_maps(%Ash.Page.Offset{} = page) do
+    %{
+      results: convert_to_maps(page.results),
+      limit: page.limit,
+      offset: page.offset,
+      count: page.count,
+      more?: page.more?
+    }
+  end
+
+  defp convert_to_maps(%Ash.Page.Keyset{} = page) do
+    %{
+      results: convert_to_maps(page.results),
+      limit: page.limit,
+      before: page.before,
+      after: page.after,
+      count: page.count,
+      more?: page.more?
+    }
+  end
+
   defp convert_to_maps(%_{} = struct) do
     if is_ash_resource?(struct) do
       struct_to_map(struct)
@@ -91,11 +112,31 @@ defmodule AshJido.Mapper do
   end
 
   defp struct_to_map(%_{} = struct) do
+    public_fields = public_field_names(struct.__struct__)
+
     struct
     |> Map.from_struct()
     |> Map.drop(@ash_meta_keys)
-    |> Enum.into(%{}, fn {k, v} -> {k, convert_to_maps(v)} end)
+    |> Enum.reduce(%{}, fn {key, value}, acc ->
+      if MapSet.member?(public_fields, key) and loaded?(value) do
+        Map.put(acc, key, convert_to_maps(value))
+      else
+        acc
+      end
+    end)
   end
+
+  defp public_field_names(resource) do
+    attributes = resource |> Ash.Resource.Info.public_attributes() |> Enum.map(& &1.name)
+    relationships = resource |> Ash.Resource.Info.public_relationships() |> Enum.map(& &1.name)
+    calculations = resource |> Ash.Resource.Info.public_calculations() |> Enum.map(& &1.name)
+    aggregates = resource |> Ash.Resource.Info.public_aggregates() |> Enum.map(& &1.name)
+
+    MapSet.new(attributes ++ relationships ++ calculations ++ aggregates)
+  end
+
+  defp loaded?(%Ash.NotLoaded{}), do: false
+  defp loaded?(_value), do: true
 
   # Ensures the final output is a map to satisfy Jido.Exec output validation.
   # Maps (including structs) pass through; all other values (lists, scalars,

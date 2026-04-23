@@ -2,6 +2,7 @@ defmodule AshJido.MapperTest do
   use ExUnit.Case, async: true
 
   alias AshJido.Mapper
+  alias AshJido.Test.ReactiveResource
   alias AshJido.Test.User
 
   defmodule PlainStruct do
@@ -100,6 +101,63 @@ defmodule AshJido.MapperTest do
       result = Mapper.wrap_result({:ok, user_with_posts}, %{output_map?: true})
 
       assert {:ok, %{id: "123", name: "John", email: "john@example.com", age: 30}} = result
+    end
+
+    test "projects Ash resource structs to public fields only" do
+      resource = %ReactiveResource{
+        id: "reactive-1",
+        name: "Visible only internally",
+        status: :draft,
+        secret: "hidden"
+      }
+
+      result = Mapper.wrap_result({:ok, resource}, %{output_map?: true})
+
+      assert {:ok, %{id: "reactive-1"}} = result
+    end
+
+    test "normalizes offset pages and converts page results" do
+      page = %Ash.Page.Offset{
+        results: [%User{id: "1", name: "Alice", email: "alice@example.com", age: 25}],
+        limit: 10,
+        offset: 0,
+        count: 1,
+        more?: false
+      }
+
+      result = Mapper.wrap_result({:ok, page}, %{output_map?: true})
+
+      assert {:ok,
+              %{
+                results: [%{id: "1", name: "Alice", email: "alice@example.com", age: 25}],
+                limit: 10,
+                offset: 0,
+                count: 1,
+                more?: false
+              }} = result
+    end
+
+    test "normalizes keyset pages and converts page results" do
+      page = %Ash.Page.Keyset{
+        results: [%User{id: "1", name: "Alice", email: "alice@example.com", age: 25}],
+        limit: 10,
+        before: nil,
+        after: "cursor",
+        count: 1,
+        more?: false
+      }
+
+      result = Mapper.wrap_result({:ok, page}, %{output_map?: true})
+
+      assert {:ok,
+              %{
+                results: [%{id: "1", name: "Alice", email: "alice@example.com", age: 25}],
+                limit: 10,
+                before: nil,
+                after: "cursor",
+                count: 1,
+                more?: false
+              }} = result
     end
 
     test "wraps empty list in result map" do
