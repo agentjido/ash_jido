@@ -20,8 +20,8 @@ defmodule AshJido.Test.CustomModules do
 
   attributes do
     uuid_primary_key(:id)
-    attribute(:title, :string, allow_nil?: false)
-    attribute(:status, :string, default: "draft")
+    attribute(:title, :string, allow_nil?: false, public?: true)
+    attribute(:status, :string, default: "draft", public?: true)
     timestamps()
   end
 

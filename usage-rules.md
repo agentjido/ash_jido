@@ -100,8 +100,7 @@ MyApp.Blog.Post.Jido.Read.run(
     filter: %{status: %{in: ["draft", "published"]}},
     sort: [%{"field" => "inserted_at", "direction" => "desc"}],
     limit: 20,
-    offset: 40,
-    load: [:author, comments: [:author]]
+    offset: 40
   },
   %{domain: MyApp.Blog}
 )
@@ -111,9 +110,11 @@ MyApp.Blog.Post.Jido.Read.run(
 - `sort` supports JSON-style maps, keyword lists, or strings like
   `"-inserted_at,title"`.
 - `limit` and `offset` support pagination.
-- `load` supports atoms, lists, and nested keyword loads.
+- `load` is available only when the action configures `allowed_loads`.
 - Query params use Ash's safe public input parsing and honor policies.
 - Disable query params with `query_params?: false`.
+- Allow runtime relationship loads with `allowed_loads` or
+  `read_allowed_loads`.
 - Bound result sizes with `max_page_size` or `read_max_page_size`.
 
 ## Signals and Telemetry
@@ -163,7 +164,8 @@ end
 - Default signal types are `{prefix}.{resource}.{action}`.
 - Default signal sources are `/ash/{resource}/{action_type}/{action}`.
 - Default subjects are `/{resource}/{primary_key}` when a primary key exists.
-- Generated-action signals put all available Ash attributes in `signal.data`.
+- Generated-action signals put primary key data in `signal.data` by default;
+  use `signal_include` to widen the payload intentionally.
 - Notifier publications use the configured `include` mode for `signal.data`.
 - Ash metadata lives in `signal.extensions["jido_metadata"]`.
 
@@ -191,7 +193,7 @@ signal delivery counters.
 
 ## Output and Mutation Semantics
 
-- `output_map?: true` is the default and converts Ash structs to plain maps.
+- `output_map?: true` is the default and converts Ash structs to public-field maps.
 - Set `output_map?: false` to preserve Ash structs.
 - Read actions return lists.
 - Create and update actions return the resulting record.

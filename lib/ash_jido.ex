@@ -86,10 +86,12 @@ defmodule AshJido do
   - `output_map?` - Convert output structs to maps (default: `true`)
   - `include_private?` - Include private inputs in generated schemas for trusted/internal tools (default: `false`)
   - `load` - Static `Ash.Query.load/2` statement for read actions (default: `nil`)
+  - `allowed_loads` - Allowlisted runtime `load` query parameter entries for read actions (default: `nil`)
   - `emit_signals?` - Emit Jido signals from Ash notifications on create/update/destroy (default: `false`)
   - `signal_dispatch` - Default dispatch configuration for emitted signals (default: `nil`)
   - `signal_type` - Override emitted signal type (default: derived)
   - `signal_source` - Override emitted signal source (default: derived)
+  - `signal_include` - Data inclusion mode for generated-action signals (default: `:pkey_only`)
   - `telemetry?` - Emit Jido-namespaced telemetry for generated action execution (default: `false`)
 
   ## Default Naming

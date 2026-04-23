@@ -73,8 +73,7 @@ Generated Jido read actions include optional query parameters for filtering, sor
     filter: %{status: %{in: ["active", "pending"]}},
     sort: [name: :asc, created_at: :desc],
     limit: 20,
-    offset: 40,
-    load: [:profile, :roles]
+    offset: 40
   },
   %{domain: MyApp.Accounts}
 )
@@ -86,9 +85,9 @@ Generated Jido read actions include optional query parameters for filtering, sor
 - `sort` (any) — Sort via JSON-style entries `[%{"field" => "name", "direction" => "asc"}]`, keyword list `[name: :asc]`, or string `"name,-age"`
 - `limit` (pos_integer) — Maximum results to return
 - `offset` (non_neg_integer) — Results to skip (for pagination)
-- `load` (any) — Relationships to load: `:author`, `[:author, :comments]`, `[author: [:profile]]`
+- `load` (any) — Optional runtime relationship/calculation loads, available only when the action configures `allowed_loads`
 
-**Security:** Query parameters use Ash's safe `filter_input`/`sort_input` variants, which only allow filtering and sorting on public attributes and honor field policies.
+**Security:** Query parameters use Ash's safe `filter_input`/`sort_input` variants, which only allow filtering and sorting on public attributes and honor field policies. Runtime `load` is disabled unless explicitly allowlisted.
 
 **Configuration:**
 
@@ -96,8 +95,10 @@ Generated Jido read actions include optional query parameters for filtering, sor
 jido do
   action :read                            # query params enabled by default
   action :read, query_params?: false      # opt out
+  action :read, allowed_loads: [:profile] # opt into runtime load
   action :read, max_page_size: 100        # clamp limit to max
   all_actions read_query_params?: true    # default for all read actions
+  all_actions read_allowed_loads: [:profile]
   all_actions read_max_page_size: 100     # max page size for all reads
 end
 ```
@@ -195,8 +196,9 @@ end
 Generated actions can also emit signals with `emit_signals?: true`; this is best when a tool run
 needs runtime dispatch overrides or telemetry signal counters. Both paths build payloads through
 `AshJido.SignalFactory`, so signal type/source/subject and `signal.extensions["jido_metadata"]`
-are consistent. Generated-action signals include all Ash attributes in `signal.data`; notifier
-publications use the configured `include` mode.
+are consistent. Generated-action signals include primary key data by default; use
+`signal_include` to explicitly widen `signal.data`. Notifier publications use the configured
+`include` mode.
 
 ### Action Options
 
@@ -208,15 +210,17 @@ publications use the configured `include` mode.
 | `category` | string | `nil` | Category for discovery/tool organization |
 | `tags` | list(string) | `[]` | Tags for categorization |
 | `vsn` | string | `nil` | Optional semantic version metadata |
-| `output_map?` | boolean | `true` | Convert structs to maps |
+| `output_map?` | boolean | `true` | Convert structs to public-field maps |
 | `include_private?` | boolean | `false` | Include inputs with `public?: false` in generated schemas for trusted/internal tools |
 | `load` | term | `nil` | Static `Ash.Query.load/2` for read actions |
-| `query_params?` | boolean | `true` | Enable query parameters (filter, sort, limit, offset, load) for read actions |
+| `allowed_loads` | term | `nil` | Allowlisted runtime `load` entries for read actions |
+| `query_params?` | boolean | `true` | Enable query parameters (filter, sort, limit, offset, and allowlisted load) for read actions |
 | `max_page_size` | pos_integer | `nil` | Maximum limit value for read actions (clamps the limit parameter) |
 | `emit_signals?` | boolean | `false` | Emit Jido signals from Ash notifications (create/update/destroy) |
 | `signal_dispatch` | term | `nil` | Default signal dispatch config (can be overridden via context) |
 | `signal_type` | string | derived | Override emitted signal type |
 | `signal_source` | string | derived | Override emitted signal source |
+| `signal_include` | atom/list(atom) | `:pkey_only` | Data inclusion mode for generated-action signals |
 | `telemetry?` | boolean | `false` | Emit Jido-namespaced telemetry for generated action execution |
 
 ### all_actions Options

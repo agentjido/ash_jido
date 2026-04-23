@@ -25,9 +25,9 @@ defmodule AshJido.GeneratorTest do
 
     attributes do
       uuid_primary_key(:id)
-      attribute(:name, :string, allow_nil?: false)
-      attribute(:email, :string, allow_nil?: false)
-      attribute(:age, :integer)
+      attribute(:name, :string, allow_nil?: false, public?: true)
+      attribute(:email, :string, allow_nil?: false, public?: true)
+      attribute(:age, :integer, public?: true)
     end
 
     actions do
@@ -67,8 +67,8 @@ defmodule AshJido.GeneratorTest do
     end
 
     attributes do
-      attribute(:slug, :string, primary_key?: true, allow_nil?: false)
-      attribute(:name, :string, allow_nil?: false)
+      attribute(:slug, :string, primary_key?: true, allow_nil?: false, public?: true)
+      attribute(:name, :string, allow_nil?: false, public?: true)
     end
 
     actions do
@@ -98,9 +98,9 @@ defmodule AshJido.GeneratorTest do
     end
 
     attributes do
-      attribute(:account_id, :string, primary_key?: true, allow_nil?: false)
-      attribute(:external_id, :string, primary_key?: true, allow_nil?: false)
-      attribute(:name, :string, allow_nil?: false)
+      attribute(:account_id, :string, primary_key?: true, allow_nil?: false, public?: true)
+      attribute(:external_id, :string, primary_key?: true, allow_nil?: false, public?: true)
+      attribute(:name, :string, allow_nil?: false, public?: true)
     end
 
     actions do
@@ -251,7 +251,24 @@ defmodule AshJido.GeneratorTest do
       assert Keyword.has_key?(schema, :sort)
       assert Keyword.has_key?(schema, :limit)
       assert Keyword.has_key?(schema, :offset)
-      assert Keyword.has_key?(schema, :load)
+      refute Keyword.has_key?(schema, :load)
+    end
+
+    test "includes load schema for read actions with allowed_loads configured" do
+      dsl_state = TestResource.spark_dsl_config()
+
+      jido_action = %AshJido.Resource.JidoAction{
+        action: :read,
+        name: "list_with_allowed_loads",
+        module_name: TestGeneratedReadAllowedLoadsAction,
+        description: "List with allowed loads",
+        output_map?: true,
+        allowed_loads: [:author]
+      }
+
+      module_name = Generator.generate_jido_action_module(TestResource, jido_action, dsl_state)
+
+      assert Keyword.has_key?(module_name.schema(), :load)
     end
 
     test "raises error for non-existent action" do

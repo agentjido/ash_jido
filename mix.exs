@@ -44,6 +44,7 @@ defmodule AshJido.MixProject do
     [
       preferred_envs: [
         coveralls: :test,
+        "coveralls.detail": :test,
         "coveralls.github": :test,
         "coveralls.html": :test
       ]

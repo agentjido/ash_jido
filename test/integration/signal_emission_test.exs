@@ -91,12 +91,12 @@ defmodule AshJido.SignalEmissionTest do
     test "context signal dispatch overrides action DSL dispatch config" do
       context = %{domain: Domain, signal_dispatch: {:pid, target: self()}}
 
-      {:ok, _resource} = ResourceWithSignals.Jido.Create.run(%{title: "Create Signal"}, context)
+      {:ok, resource} = ResourceWithSignals.Jido.Create.run(%{title: "Create Signal"}, context)
 
       assert_receive {:signal, %Jido.Signal{} = signal}
       assert signal.type == "ash.resource_with_signals.create"
       assert signal.source == "/ash/resource_with_signals/create/create"
-      assert signal.data.title == "Create Signal"
+      assert signal.data == %{id: resource[:id]}
       assert signal_metadata(signal).ash_action == :create
       assert signal_metadata(signal).ash_resource == ResourceWithSignals
     end
@@ -111,7 +111,7 @@ defmodule AshJido.SignalEmissionTest do
       assert updated[:title] == "After"
       assert_receive {:signal, %Jido.Signal{} = signal}
       assert signal.type == "ash.resource_with_signals.update"
-      assert signal.data.title == "After"
+      assert signal.data == %{id: updated[:id]}
       assert signal_metadata(signal).ash_action == :update
       assert signal_metadata(signal).ash_resource == ResourceWithSignals
     end

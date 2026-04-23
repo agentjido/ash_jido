@@ -14,6 +14,7 @@ jido do
   action :create,
     emit_signals?: true,
     signal_dispatch: {:noop, []},
+    signal_include: [:id],
     telemetry?: true
 
   action :update,
@@ -41,8 +42,9 @@ Both paths produce the same envelope conventions:
 - `signal.subject` identifies the primary key as `/{resource_short_name}/{id}` when available.
 - `signal.extensions["jido_metadata"]` includes Ash resource, action, action type, and timestamp metadata.
 
-Generated-action signals put all available Ash attributes in `signal.data`. Notifier publications
-use the publication `include` mode (`:pkey_only`, `:all`, `:changes_only`, or selected fields).
+Generated-action signals put primary key data in `signal.data` by default. Use `signal_include`
+to widen payloads intentionally. Notifier publications use the publication `include` mode
+(`:pkey_only`, `:all`, `:changes_only`, or selected fields).
 
 ## 2. Dispatch to a Runtime Target
 

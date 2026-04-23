@@ -192,7 +192,7 @@ defmodule AshJido.SignalEmitterTest do
       assert result.failed == []
 
       assert_receive {:signal, %Jido.Signal{} = signal}, 500
-      assert signal.data == %{id: "123", name: "Test"}
+      assert signal.data == %{id: "123"}
       assert signal_metadata(signal).ash_action == :create
     end
 
@@ -245,6 +245,62 @@ defmodule AshJido.SignalEmitterTest do
 
       assert result.sent == 0
       assert result.failed == []
+    end
+
+    test "fills in missing notification action data" do
+      jido_config = %{
+        emit_signals?: true,
+        signal_dispatch: {:pid, target: self()},
+        signal_type: nil,
+        signal_source: nil
+      }
+
+      notification = %Ash.Notifier.Notification{
+        resource: AshJido.Test.User,
+        action: nil,
+        data: %{id: "123"},
+        metadata: %{}
+      }
+
+      result =
+        SignalEmitter.emit_notifications(
+          [notification],
+          %{},
+          AshJido.Test.User,
+          :create,
+          jido_config
+        )
+
+      assert result.sent == 1
+      assert_receive {:signal, %Jido.Signal{type: "ash.user.create"}}, 500
+    end
+
+    test "tracks signal build failures" do
+      jido_config = %{
+        emit_signals?: true,
+        signal_dispatch: {:pid, target: self()},
+        signal_type: "",
+        signal_source: nil
+      }
+
+      notification = %Ash.Notifier.Notification{
+        resource: AshJido.Test.User,
+        action: %{type: :create},
+        data: %{id: "123"},
+        metadata: %{}
+      }
+
+      result =
+        SignalEmitter.emit_notifications(
+          [notification],
+          %{},
+          AshJido.Test.User,
+          :create,
+          jido_config
+        )
+
+      assert result.sent == 0
+      assert [%{reason: _reason}] = result.failed
     end
 
     test "handles multiple notifications with mixed success/failure" do

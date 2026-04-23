@@ -6,12 +6,139 @@ defmodule AshJido.NotifierTest do
 
   @moduletag :capture_log
 
+  defmodule BusResolver do
+    def bus, do: :ash_jido_test_bus
+    def bad_bus, do: raise("bad bus")
+  end
+
+  defmodule MfaBusResource do
+    use Ash.Resource,
+      domain: nil,
+      data_layer: Ash.DataLayer.Ets,
+      extensions: [AshJido],
+      notifiers: [AshJido.Notifier]
+
+    ets do
+      private?(true)
+    end
+
+    attributes do
+      uuid_primary_key(:id)
+      attribute(:name, :string, allow_nil?: false, public?: true)
+    end
+
+    actions do
+      defaults([:read])
+
+      create :create do
+        accept([:name])
+      end
+    end
+
+    jido do
+      signal_bus({AshJido.NotifierTest.BusResolver, :bus, []})
+      publish(:create)
+    end
+  end
+
+  defmodule InvalidMfaBusResource do
+    use Ash.Resource,
+      domain: nil,
+      data_layer: Ash.DataLayer.Ets,
+      extensions: [AshJido],
+      notifiers: [AshJido.Notifier]
+
+    ets do
+      private?(true)
+    end
+
+    attributes do
+      uuid_primary_key(:id)
+      attribute(:name, :string, allow_nil?: false, public?: true)
+    end
+
+    actions do
+      defaults([:read])
+
+      create :create do
+        accept([:name])
+      end
+    end
+
+    jido do
+      signal_bus({AshJido.NotifierTest.BusResolver, :bad_bus, []})
+      publish(:create)
+    end
+  end
+
+  defmodule PreviousStateResource do
+    use Ash.Resource,
+      domain: nil,
+      data_layer: Ash.DataLayer.Ets,
+      extensions: [AshJido],
+      notifiers: [AshJido.Notifier]
+
+    ets do
+      private?(true)
+    end
+
+    attributes do
+      uuid_primary_key(:id)
+      attribute(:name, :string, allow_nil?: false, public?: true)
+    end
+
+    actions do
+      defaults([:read])
+
+      update :update do
+        require_atomic?(false)
+        accept([:name])
+      end
+    end
+
+    jido do
+      publish(:update, metadata: [:previous_state])
+    end
+  end
+
   test "returns :ok when no publications are configured" do
     notification =
       build_notification(
         AshJido.Test.User,
         :register,
         struct(AshJido.Test.User, %{id: "123", name: "Jane", email: "jane@example.com"})
+      )
+
+    assert :ok = Notifier.notify(notification)
+  end
+
+  test "publishes signals through a signal bus resolved by MFA" do
+    start_supervised!({Jido.Signal.Bus, name: :ash_jido_test_bus})
+
+    assert {:ok, _subscription_id} =
+             Jido.Signal.Bus.subscribe(
+               :ash_jido_test_bus,
+               "**",
+               dispatch: {:pid, target: self()}
+             )
+
+    notification =
+      build_notification(
+        MfaBusResource,
+        :create,
+        struct(MfaBusResource, %{id: "mfa-1", name: "MFA"})
+      )
+
+    assert :ok = Notifier.notify(notification)
+    assert_receive {:signal, %Jido.Signal{type: "ash.mfa_bus_resource.create"}}, 500
+  end
+
+  test "logs error and returns :ok when signal bus MFA raises" do
+    notification =
+      build_notification(
+        InvalidMfaBusResource,
+        :create,
+        struct(InvalidMfaBusResource, %{id: "bad-mfa-1", name: "MFA"})
       )
 
     assert :ok = Notifier.notify(notification)
@@ -68,6 +195,12 @@ defmodule AshJido.NotifierTest do
                %{status: :published},
                domain: domain
              )
+  end
+
+  test "requires original data when publication metadata requests previous_state" do
+    action = Ash.Resource.Info.action(PreviousStateResource, :update)
+
+    assert Notifier.requires_original_data?(PreviousStateResource, action)
   end
 
   defp build_notification(resource, action_name, data, opts \\ []) do

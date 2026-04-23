@@ -209,15 +209,17 @@ Each action in the `jido` section supports these options:
 | `category` | `string` | `nil` | Category for discovery/tool organization |
 | `tags` | `list(string)` | `[]` | Tags for categorization and AI discovery |
 | `vsn` | `string` | `nil` | Optional semantic version metadata |
-| `output_map?` | `boolean` | `true` | Convert output structs to maps |
+| `output_map?` | `boolean` | `true` | Convert output structs to public-field maps |
 | `include_private?` | `boolean` | `false` | Include inputs with `public?: false` in generated schemas for trusted/internal tools |
 | `load` | `term` | `nil` | Static `Ash.Query.load/2` statement for read actions |
-| `query_params?` | `boolean` | `true` | Enable query parameters (filter, sort, limit, offset, load) for read actions |
+| `allowed_loads` | `term` | `nil` | Allowlisted runtime `load` entries for read actions |
+| `query_params?` | `boolean` | `true` | Enable query parameters (filter, sort, limit, offset, and allowlisted load) for read actions |
 | `max_page_size` | `pos_integer` | `nil` | Maximum limit value for read actions (clamps the limit parameter) |
 | `emit_signals?` | `boolean` | `false` | Emit Jido signals from Ash notifications (create/update/destroy) |
 | `signal_dispatch` | `term` | `nil` | Default signal dispatch config (overridable via context) |
 | `signal_type` | `string` | derived | Override emitted signal type |
 | `signal_source` | `string` | derived | Override emitted signal source |
+| `signal_include` | `atom | list(atom)` | `:pkey_only` | Data inclusion mode for generated-action signals |
 | `telemetry?` | `boolean` | `false` | Emit Jido-namespaced telemetry for generated action execution |
 
 `all_actions` additionally supports:
@@ -264,9 +266,9 @@ jido do
 end
 ```
 
-Both paths use `AshJido.SignalFactory`. Generated-action signals include all
-available Ash attributes in `signal.data`; notifier publications use the
-configured `include` mode.
+Both paths use `AshJido.SignalFactory`. Generated-action signals include
+primary key data in `signal.data` by default; use `signal_include` to widen the
+payload intentionally. Notifier publications use the configured `include` mode.
 
 ### Telemetry
 
@@ -544,7 +546,7 @@ alias MyApp.Blog.Post
 
 ## Querying and Filtering
 
-Generated Jido read actions support query parameters for filtering, sorting, pagination, and relationship loading. These parameters are optional and provide powerful querying capabilities while respecting Ash's authorization policies.
+Generated Jido read actions support query parameters for filtering, sorting, pagination, and allowlisted relationship loading. These parameters are optional and provide powerful querying capabilities while respecting Ash's authorization policies.
 
 ### Filter Syntax
 

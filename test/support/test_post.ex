@@ -14,9 +14,9 @@ defmodule AshJido.Test.Post do
 
   attributes do
     uuid_primary_key(:id)
-    attribute(:title, :string, allow_nil?: false)
-    attribute(:content, :string)
-    attribute(:published, :boolean, default: false)
+    attribute(:title, :string, allow_nil?: false, public?: true)
+    attribute(:content, :string, public?: true)
+    attribute(:published, :boolean, default: false, public?: true)
     timestamps()
   end
 

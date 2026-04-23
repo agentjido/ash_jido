@@ -10,8 +10,8 @@ GitHub release workflow.
 ## Added
 
 - Read-action query parameters for generated actions: `filter`, `sort`, `limit`,
-  `offset`, and dynamic relationship `load`, with Ash safe input parsing and
-  optional `max_page_size` bounds.
+  `offset`, and allowlisted dynamic relationship `load`, with Ash safe input
+  parsing and optional `max_page_size` bounds.
 - Static resource-domain fallback, so generated actions use `context[:domain]`
   first and then the resource's configured `domain:` before raising.
 - Public-surface schema generation that follows Ash `public?: true` inputs by
