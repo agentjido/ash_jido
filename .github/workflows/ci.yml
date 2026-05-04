@@ -21,7 +21,7 @@ jobs:
 
   test:
     name: Test
-    uses: agentjido/github-actions/.github/workflows/elixir-test.yml@v3
+    uses: agentjido/github-actions/.github/workflows/elixir-test.yml@v4
     with:
       otp_versions: '["27", "28"]'
       elixir_versions: '["1.18", "1.19"]'
