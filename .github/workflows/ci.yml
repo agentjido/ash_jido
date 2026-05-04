@@ -13,7 +13,7 @@ concurrency:
 jobs:
   lint:
     name: Lint
-    uses: agentjido/github-actions/.github/workflows/elixir-lint.yml@v3
+    uses: agentjido/github-actions/.github/workflows/elixir-lint.yml@v4
     with:
       otp_version: "28"
       elixir_version: "1.19"
