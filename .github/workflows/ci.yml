@@ -2,6 +2,7 @@ name: CI
 
 on:
   pull_request:
+  merge_group:
   push:
     branches:
       - main
@@ -10,127 +11,20 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-jobs:
-  lint:
-    name: Lint
-    uses: agentjido/github-actions/.github/workflows/elixir-lint.yml@v3
-    with:
-      otp_version: "28"
-      elixir_version: "1.19"
-      validate_hex_package: false
+permissions:
+  actions: read
+  contents: read
 
-  test:
-    name: Test
-    uses: agentjido/github-actions/.github/workflows/elixir-test.yml@v3
+jobs:
+  ci:
+    name: CI
+    uses: agentjido/github-actions/.github/workflows/jido-ci.yml@v4
+    secrets: inherit
     with:
       otp_versions: '["27", "28"]'
       elixir_versions: '["1.18", "1.19"]'
+      experimental_compile_elixir_versions: '["v1.20.0-rc.4"]'
+      experimental_compile_otp_versions: '["28.4.1"]'
+      experimental_compile_otp_name: '28'
+      docs_command: mix docs -f html
       test_command: mix test
-
-  docs:
-    name: Docs
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Setup Elixir
-        uses: erlef/setup-beam@v1
-        with:
-          otp-version: "28"
-          elixir-version: "1.19"
-
-      - name: Install dependencies
-        run: mix deps.get
-
-      - name: Compile dependencies
-        run: |
-          mix deps.compile --include-children
-          mix deps.compile libgraph --force
-
-      - name: Build docs
-        run: mix docs
-
-      - name: Check documentation coverage
-        run: mix doctor --raise
-
-  coverage:
-    name: Coverage
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Setup Elixir
-        uses: erlef/setup-beam@v1
-        with:
-          otp-version: "28"
-          elixir-version: "1.19"
-
-      - name: Install dependencies
-        run: mix deps.get
-
-      - name: Compile dependencies
-        run: |
-          mix deps.compile --include-children
-          MIX_ENV=test mix deps.compile libgraph --force
-
-      - name: Run coverage
-        run: mix coveralls
-
-  consumer-integration:
-    name: Consumer Integration (AshPostgres)
-    runs-on: ubuntu-latest
-
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_DB: ash_jido_consumer_test
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres -d ash_jido_consumer_test"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
-    env:
-      MIX_ENV: test
-      ASH_JIDO_CONSUMER_DB_HOST: 127.0.0.1
-      ASH_JIDO_CONSUMER_DB_PORT: "5432"
-      ASH_JIDO_CONSUMER_DB_USER: postgres
-      ASH_JIDO_CONSUMER_DB_PASS: postgres
-      ASH_JIDO_CONSUMER_DB_NAME: ash_jido_consumer_test
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Setup Elixir
-        uses: erlef/setup-beam@v1
-        with:
-          otp-version: "28"
-          elixir-version: "1.19"
-
-      - name: Install dependencies
-        working-directory: ash_jido_consumer
-        run: mix deps.get
-
-      - name: Compile ash_jido dependency tree
-        working-directory: ash_jido_consumer
-        run: |
-          mix deps.compile ash_jido --include-children
-          mix deps.compile libgraph --force
-
-      - name: Check formatting
-        working-directory: ash_jido_consumer
-        run: mix format --check-formatted
-
-      - name: Run consumer integration tests
-        working-directory: ash_jido_consumer
-        run: mix test
