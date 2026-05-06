@@ -26,5 +26,6 @@ jobs:
       experimental_compile_elixir_versions: '["v1.20.0-rc.4"]'
       experimental_compile_otp_versions: '["28.4.1"]'
       experimental_compile_otp_name: '28'
+      credo_command: mix credo --min-priority higher
       docs_command: mix docs -f html
       test_command: mix test
