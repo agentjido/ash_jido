@@ -106,6 +106,14 @@ defmodule AshJido.RelationshipLoadTest do
   end
 
   describe "relationship-aware reads" do
+    test "create schema includes accepted belongs_to source attributes" do
+      schema = ArticleWithActionLoad.Jido.Create.schema()
+
+      assert schema[:title][:required] == true
+      assert schema[:author_id][:type] == :string
+      assert schema[:author_id][:required] == true
+    end
+
     test "action load applies static read relationship load" do
       author =
         Author
