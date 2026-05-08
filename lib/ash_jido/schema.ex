@@ -4,6 +4,8 @@ defmodule AshJido.Schema do
   alias AshJido.TypeMapper
   alias Spark.Dsl.Transformer
 
+  @default_belongs_to_type Application.compile_env(:ash, :default_belongs_to_type, :uuid)
+
   @doc false
   @spec build_parameter_schema(term(), AshJido.Resource.JidoAction.t(), Spark.Dsl.t()) ::
           keyword()
@@ -52,18 +54,23 @@ defmodule AshJido.Schema do
 
   defp accepted_attributes_to_schema(ash_action, dsl_state, jido_action) do
     accepted_names = ash_action.accept || []
-    all_attributes = Transformer.get_entities(dsl_state, [:attributes])
+    attributes_by_name = attributes_by_name(dsl_state)
+    belongs_to_source_attributes = belongs_to_source_attributes(dsl_state)
 
     accepted_names
     |> Enum.flat_map(fn attr_name ->
-      attr = Enum.find(all_attributes, &(&1.name == attr_name))
+      attr = Map.get(attributes_by_name, attr_name)
+      relationship = Map.get(belongs_to_source_attributes, attr_name)
 
       cond do
-        is_nil(attr) ->
+        attr && include_schema_input?(attr, jido_action) ->
+          [{attr_name, attribute_to_nimble_options(attr)}]
+
+        attr ->
           []
 
-        include_schema_input?(attr, jido_action) ->
-          [{attr_name, attribute_to_nimble_options(attr)}]
+        relationship && include_source_attribute_schema_input?(relationship, jido_action) ->
+          [{attr_name, relationship_source_attribute_to_nimble_options(relationship)}]
 
         true ->
           []
@@ -71,12 +78,27 @@ defmodule AshJido.Schema do
     end)
   end
 
+  defp attributes_by_name(dsl_state) do
+    dsl_state
+    |> Transformer.get_entities([:attributes])
+    |> Map.new(&{&1.name, &1})
+  end
+
+  defp belongs_to_source_attributes(dsl_state) do
+    dsl_state
+    |> Transformer.get_entities([:relationships])
+    |> Enum.filter(&(&1.type == :belongs_to))
+    |> Map.new(fn relationship ->
+      {relationship.source_attribute || :"#{relationship.name}_id", relationship}
+    end)
+  end
+
   defp primary_key_to_schema(dsl_state, action_type) do
     primary_key = primary_key_fields(dsl_state)
-    all_attributes = Transformer.get_entities(dsl_state, [:attributes])
+    attributes_by_name = attributes_by_name(dsl_state)
 
     Enum.map(primary_key, fn attr_name ->
-      attr = Enum.find(all_attributes, &(&1.name == attr_name))
+      attr = Map.get(attributes_by_name, attr_name)
 
       opts =
         case attr do
@@ -116,6 +138,20 @@ defmodule AshJido.Schema do
     end
   end
 
+  defp relationship_source_attribute_to_nimble_options(relationship) do
+    allow_nil? =
+      if relationship.primary_key? do
+        false
+      else
+        relationship.allow_nil?
+      end
+
+    TypeMapper.ash_type_to_nimble_options(
+      relationship.attribute_type || @default_belongs_to_type,
+      %{allow_nil?: allow_nil?}
+    )
+  end
+
   defp action_args_to_schema(arguments, jido_action) do
     arguments
     |> Enum.filter(&include_schema_input?(&1, jido_action))
@@ -128,4 +164,14 @@ defmodule AshJido.Schema do
 
   defp include_schema_input?(%{public?: false}, _jido_action), do: false
   defp include_schema_input?(_input, _jido_action), do: true
+
+  defp include_source_attribute_schema_input?(_relationship, %{include_private?: true}), do: true
+
+  defp include_source_attribute_schema_input?(%{attribute_public?: false}, _jido_action),
+    do: false
+
+  defp include_source_attribute_schema_input?(%{attribute_public?: true}, _jido_action), do: true
+
+  defp include_source_attribute_schema_input?(relationship, jido_action),
+    do: include_schema_input?(relationship, jido_action)
 end

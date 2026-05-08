@@ -53,7 +53,7 @@ defmodule AshJido.TypeMapper do
   Maps an Ash type to its corresponding NimbleOptions type.
   """
   def map_ash_type(ash_type) do
-    case ash_type do
+    case Ash.Type.get_type(ash_type) do
       Ash.Type.String -> :string
       Ash.Type.Integer -> :integer
       Ash.Type.Float -> :float

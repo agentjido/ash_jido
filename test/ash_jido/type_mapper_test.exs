@@ -71,6 +71,15 @@ defmodule AshJido.TypeMapperTest do
       assert result[:required] == true
     end
 
+    test "maps Ash DSL type short names correctly" do
+      result = TypeMapper.ash_type_to_nimble_options(:uuid, %{allow_nil?: false})
+      assert result[:type] == :string
+      assert result[:required] == true
+
+      result = TypeMapper.ash_type_to_nimble_options(:integer, %{})
+      assert result[:type] == :integer
+    end
+
     test "maps array types recursively" do
       # Array of strings
       result = TypeMapper.ash_type_to_nimble_options({:array, Ash.Type.String}, %{})
