@@ -4,6 +4,8 @@ defmodule AshJido.Schema do
   alias AshJido.TypeMapper
   alias Spark.Dsl.Transformer
 
+  @default_belongs_to_type Application.compile_env(:ash, :default_belongs_to_type, :uuid)
+
   @doc false
   @spec build_parameter_schema(term(), AshJido.Resource.JidoAction.t(), Spark.Dsl.t()) ::
           keyword()
@@ -52,12 +54,12 @@ defmodule AshJido.Schema do
 
   defp accepted_attributes_to_schema(ash_action, dsl_state, jido_action) do
     accepted_names = ash_action.accept || []
-    all_attributes = Transformer.get_entities(dsl_state, [:attributes])
+    attributes_by_name = attributes_by_name(dsl_state)
     belongs_to_source_attributes = belongs_to_source_attributes(dsl_state)
 
     accepted_names
     |> Enum.flat_map(fn attr_name ->
-      attr = Enum.find(all_attributes, &(&1.name == attr_name))
+      attr = Map.get(attributes_by_name, attr_name)
       relationship = Map.get(belongs_to_source_attributes, attr_name)
 
       cond do
@@ -76,6 +78,12 @@ defmodule AshJido.Schema do
     end)
   end
 
+  defp attributes_by_name(dsl_state) do
+    dsl_state
+    |> Transformer.get_entities([:attributes])
+    |> Map.new(&{&1.name, &1})
+  end
+
   defp belongs_to_source_attributes(dsl_state) do
     dsl_state
     |> Transformer.get_entities([:relationships])
@@ -87,10 +95,10 @@ defmodule AshJido.Schema do
 
   defp primary_key_to_schema(dsl_state, action_type) do
     primary_key = primary_key_fields(dsl_state)
-    all_attributes = Transformer.get_entities(dsl_state, [:attributes])
+    attributes_by_name = attributes_by_name(dsl_state)
 
     Enum.map(primary_key, fn attr_name ->
-      attr = Enum.find(all_attributes, &(&1.name == attr_name))
+      attr = Map.get(attributes_by_name, attr_name)
 
       opts =
         case attr do
@@ -139,7 +147,7 @@ defmodule AshJido.Schema do
       end
 
     TypeMapper.ash_type_to_nimble_options(
-      relationship.attribute_type || Application.get_env(:ash, :default_belongs_to_type, :uuid),
+      relationship.attribute_type || @default_belongs_to_type,
       %{allow_nil?: allow_nil?}
     )
   end
