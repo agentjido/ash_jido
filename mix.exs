@@ -1,7 +1,7 @@
 defmodule AshJido.MixProject do
   use Mix.Project
 
-  @version "0.1.0"
+  @version "1.0.0"
   @source_url "https://github.com/agentjido/ash_jido"
   @description "Integration between the Ash Framework and the Jido Agent ecosystem."
 
@@ -64,11 +64,11 @@ defmodule AshJido.MixProject do
     [
       # Runtime dependencies
       {:ash, "~> 3.12"},
-      {:jido, "~> 2.2"},
-      {:jido_action, "~> 2.2"},
-      {:jido_signal, "~> 2.1"},
+      {:jido, "~> 2.3"},
+      {:jido_action, "~> 2.3"},
+      {:jido_signal, "~> 2.2"},
       {:splode, "~> 0.3"},
-      {:zoi, "~> 0.17"},
+      {:zoi, "~> 0.18"},
 
       # Dev/Test dependencies
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
