@@ -1,5 +1,13 @@
 # AshJido
 
+[![Hex.pm](https://img.shields.io/hexpm/v/ash_jido.svg)](https://hex.pm/packages/ash_jido)
+[![Hex Docs](https://img.shields.io/badge/hex-docs-lightgreen.svg)](https://hexdocs.pm/ash_jido/)
+[![CI](https://github.com/agentjido/ash_jido/actions/workflows/ci.yml/badge.svg)](https://github.com/agentjido/ash_jido/actions/workflows/ci.yml)
+[![License](https://img.shields.io/hexpm/l/ash_jido.svg)](https://github.com/agentjido/ash_jido/blob/main/LICENSE)
+[![Website](https://img.shields.io/badge/website-jido.run-0f172a.svg)](https://jido.run)
+[![Ecosystem](https://img.shields.io/badge/ecosystem-jido.run-0ea5e9.svg)](https://jido.run/ecosystem)
+[![Discord](https://img.shields.io/badge/discord-join-5865F2.svg?logo=discord&logoColor=white)](https://jido.run/discord)
+
 Bridge Ash Framework resources with Jido agents. Generates `Jido.Action` modules from Ash actions at compile time.
 
 ## What This Library Does
