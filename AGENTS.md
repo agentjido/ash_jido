@@ -56,6 +56,10 @@ AshJido is a thin bridge library (~400 LOC) that generates `Jido.Action` modules
 
 
 
+## Release Hygiene
+
+- Do not modify `CHANGELOG.md`; release notes are generated from Git history during release, so keep changes focused on proper Conventional Commits.
+
 <!-- usage-rules-start -->
 <!-- usage-rules-header -->
 # Usage Rules
