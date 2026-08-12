@@ -20,3 +20,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 [Unreleased]: https://github.com/agentjido/ash_jido/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/agentjido/ash_jido/releases/tag/v0.1.0
+
+<!-- changelog -->
+
+## [1.0.1](https://github.com/agentjido/ash_jido/compare/v1.0.1...1.0.1) (2026-08-12)
+
+
+
+
+### Bug Fixes:
+
+* deps: update Jido for release preflight by mikehostetler
+
+* deps: require patched Ash for CVE-2026-67579 by mikehostetler
+
+* deps: update Ash to 3.31.2 (#102) by mikehostetler
+
+* deps: update Mint for CVE-2026-59249 by mikehostetler
