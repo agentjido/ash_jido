@@ -29,7 +29,7 @@ defmodule AshJidoConsumer.MixProject do
 
   defp deps do
     [
-      {:ash, "~> 3.12"},
+      {:ash, "~> 3.31 and >= 3.31.3"},
       {:ash_postgres, "~> 2.5"},
       {:ecto_sql, "~> 3.13"},
       {:postgrex, ">= 0.0.0"},
