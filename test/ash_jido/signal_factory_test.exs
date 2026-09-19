@@ -1,278 +1,113 @@
 defmodule AshJido.SignalFactoryTest do
-  use ExUnit.Case, async: false
+  use ExUnit.Case, async: true
 
   alias Ash.Notifier.Notification
   alias AshJido.Publication
   alias AshJido.SignalFactory
+  alias AshJido.Test.ReactiveResource
 
-  describe "from_notification/2" do
-    test "creates signal with auto-derived type" do
-      notification = build_notification(:create, base_record(%{id: "123", name: "Test"}))
-      publication = %Publication{actions: [:create], include: :all, metadata: []}
+  defp notification(data, options \\ []) do
+    action = Ash.Resource.Info.action(ReactiveResource, Keyword.get(options, :action, :create))
 
-      assert {:ok, signal} = SignalFactory.from_notification(notification, publication)
-      assert signal.type == "test.reactive_resource.create"
-      assert signal.data.id == "123"
-      assert signal.data.name == "Test"
-    end
-
-    test "creates signal with explicit type override" do
-      notification = build_notification(:create, base_record(%{id: "123"}))
-
-      publication = %Publication{
-        actions: [:create],
-        signal_type: "custom.domain.created",
-        include: :pkey_only,
-        metadata: []
-      }
-
-      assert {:ok, signal} = SignalFactory.from_notification(notification, publication)
-      assert signal.type == "custom.domain.created"
-    end
-
-    test "pkey_only includes only primary key" do
-      notification =
-        build_notification(
-          :create,
-          base_record(%{id: "123", name: "Test", secret: "hidden"})
-        )
-
-      publication = %Publication{actions: [:create], include: :pkey_only, metadata: []}
-
-      assert {:ok, signal} = SignalFactory.from_notification(notification, publication)
-      assert signal.data == %{id: "123"}
-      refute Map.has_key?(signal.data, :name)
-      refute Map.has_key?(signal.data, :secret)
-    end
-
-    test "pkey_only handles nil notification data" do
-      notification = build_notification(:create, nil)
-      publication = %Publication{actions: [:create], include: :pkey_only, metadata: []}
-
-      assert {:ok, signal} = SignalFactory.from_notification(notification, publication)
-      assert signal.data == %{}
-      assert signal.subject == nil
-    end
-
-    test "all includes attributes explicitly set to nil" do
-      notification =
-        build_notification(
-          :create,
-          base_record(%{id: "123", name: "Test", secret: nil})
-        )
-
-      publication = %Publication{actions: [:create], include: :all, metadata: []}
-
-      assert {:ok, signal} = SignalFactory.from_notification(notification, publication)
-      assert Map.has_key?(signal.data, :secret)
-      assert signal.data.secret == nil
-    end
-
-    test "changes_only includes only changed attributes" do
-      previous = base_record(%{id: "123", status: :draft, name: "Old"})
-      changeset = Ash.Changeset.for_update(previous, :update, %{status: :published})
-      updated = base_record(%{id: "123", status: :published, name: "Old"})
-      notification = build_notification(:update, updated, changeset: changeset)
-      publication = %Publication{actions: [:update], include: :changes_only, metadata: []}
-
-      assert {:ok, signal} = SignalFactory.from_notification(notification, publication)
-      assert signal.data == %{status: :published}
-    end
-
-    test "changes_only resolves atomic attribute values from notification data" do
-      start_supervised!({Jido.Signal.Bus, name: :ash_jido_test_bus})
-
-      record =
-        AshJido.Test.ReactiveResource
-        |> Ash.Changeset.for_create(:create, %{name: "Old"})
-        |> Ash.create!()
-
-      {updated, notifications} =
-        record
-        |> Ash.Changeset.for_update(:update, %{status: :published})
-        |> Ash.update!(return_notifications?: true)
-
-      notification = Enum.find(notifications, &(&1.action.name == :update))
-      publication = %Publication{actions: [:update], include: :changes_only, metadata: []}
-
-      assert %Notification{} = notification
-      assert {:ok, signal} = SignalFactory.from_notification(notification, publication)
-      assert signal.data.status == :published
-      assert signal.data.updated_at == updated.updated_at
-    end
-
-    test "explicit field list filters attributes" do
-      notification =
-        build_notification(
-          :create,
-          base_record(%{id: "123", name: "Test", secret: "hidden"})
-        )
-
-      publication = %Publication{actions: [:create], include: [:id, :name], metadata: []}
-
-      assert {:ok, signal} = SignalFactory.from_notification(notification, publication)
-      assert signal.data == %{id: "123", name: "Test"}
-      refute Map.has_key?(signal.data, :secret)
-    end
-
-    test "explicit field list includes attributes explicitly set to nil" do
-      notification =
-        build_notification(
-          :create,
-          base_record(%{id: "123", name: "Test", secret: nil})
-        )
-
-      publication = %Publication{actions: [:create], include: [:id, :secret], metadata: []}
-
-      assert {:ok, signal} = SignalFactory.from_notification(notification, publication)
-      assert signal.data == %{id: "123", secret: nil}
-    end
-
-    test "includes actor_id when :actor in metadata" do
-      notification =
-        build_notification(
-          :create,
-          base_record(%{id: "123"}),
-          actor: %{id: "user-456"}
-        )
-
-      publication = %Publication{actions: [:create], include: :pkey_only, metadata: [:actor]}
-
-      assert {:ok, signal} = SignalFactory.from_notification(notification, publication)
-      assert signal_metadata(signal).actor_id == "user-456"
-    end
-
-    test "includes string-key actor ids when :actor in metadata" do
-      notification =
-        build_notification(
-          :create,
-          base_record(%{id: "123"}),
-          actor: %{"id" => "user-789"}
-        )
-
-      publication = %Publication{actions: [:create], include: :pkey_only, metadata: [:actor]}
-
-      assert {:ok, signal} = SignalFactory.from_notification(notification, publication)
-      assert signal_metadata(signal).actor_id == "user-789"
-    end
-
-    test "includes tenant when :tenant in metadata" do
-      changeset =
-        Ash.Changeset.for_create(
-          AshJido.Test.ReactiveResource,
-          :create,
-          %{name: "Test"},
-          tenant: "org_abc"
-        )
-
-      notification =
-        build_notification(
-          :create,
-          base_record(%{id: "123"}),
-          changeset: changeset
-        )
-
-      publication = %Publication{actions: [:create], include: :pkey_only, metadata: [:tenant]}
-
-      assert {:ok, signal} = SignalFactory.from_notification(notification, publication)
-      assert signal_metadata(signal).tenant == "org_abc"
-    end
-
-    test "source URI follows /ash/{resource}/{type}/{name} pattern" do
-      notification = build_notification(:create, base_record(%{id: "123"}))
-      publication = %Publication{actions: [:create], include: :pkey_only, metadata: []}
-
-      assert {:ok, signal} = SignalFactory.from_notification(notification, publication)
-      assert signal.source == "/ash/reactive_resource/create/create"
-    end
-
-    test "includes previous state metadata when requested" do
-      previous = base_record(%{id: "123", name: "Before"})
-      changeset = Ash.Changeset.for_update(previous, :update, %{name: "After"})
-      updated = base_record(%{id: "123", name: "After"})
-      notification = build_notification(:update, updated, changeset: changeset)
-
-      publication =
-        %Publication{actions: [:update], include: :pkey_only, metadata: [:previous_state]}
-
-      assert {:ok, signal} = SignalFactory.from_notification(notification, publication)
-      assert signal_metadata(signal).previous_state.name == "Before"
-    end
-
-    test "subject identifies specific record" do
-      notification = build_notification(:create, base_record(%{id: "abc-123"}))
-      publication = %Publication{actions: [:create], include: :pkey_only, metadata: []}
-
-      assert {:ok, signal} = SignalFactory.from_notification(notification, publication)
-      assert signal.subject == "/reactive_resource/abc-123"
-    end
-
-    test "generated-action config defaults to primary-key-only payloads" do
-      notification = build_notification(:create, base_record(%{id: "123", name: "Generated"}))
-
-      jido_action = %AshJido.Resource.JidoAction{
-        action: :create,
-        signal_type: nil,
-        signal_source: nil
-      }
-
-      assert {:ok, signal} = SignalFactory.from_notification(notification, jido_action)
-      assert signal.type == "test.reactive_resource.create"
-      assert signal.source == "/ash/reactive_resource/create/create"
-      assert signal.subject == "/reactive_resource/123"
-      assert signal.data == %{id: "123"}
-      assert signal_metadata(signal).ash_action == :create
-    end
-
-    test "generated-action config can explicitly widen signal payloads" do
-      notification = build_notification(:create, base_record(%{id: "123", name: "Generated"}))
-
-      jido_action = %AshJido.Resource.JidoAction{
-        action: :create,
-        signal_include: [:id, :name],
-        signal_type: nil,
-        signal_source: nil
-      }
-
-      assert {:ok, signal} = SignalFactory.from_notification(notification, jido_action)
-      assert signal.data == %{id: "123", name: "Generated"}
-    end
-
-    test "generated-action config can override signal type and source" do
-      notification = build_notification(:create, base_record(%{id: "123"}))
-
-      jido_action = %AshJido.Resource.JidoAction{
-        action: :create,
-        signal_type: "custom.generated.created",
-        signal_source: "/custom/generated"
-      }
-
-      assert {:ok, signal} = SignalFactory.from_notification(notification, jido_action)
-      assert signal.type == "custom.generated.created"
-      assert signal.source == "/custom/generated"
-    end
-  end
-
-  defp build_notification(action_name, data, opts \\ []) do
     %Notification{
-      resource: AshJido.Test.ReactiveResource,
-      action: Ash.Resource.Info.action(AshJido.Test.ReactiveResource, action_name),
+      resource: ReactiveResource,
+      action: action,
       data: data,
-      changeset: Keyword.get(opts, :changeset),
-      actor: Keyword.get(opts, :actor),
-      metadata: %{}
+      actor: Keyword.get(options, :actor),
+      changeset: Keyword.get(options, :changeset)
     }
   end
 
-  defp base_record(attrs) do
-    defaults = %{id: "base-id", name: "Name", status: :draft, secret: "secret"}
-    struct(AshJido.Test.ReactiveResource, Map.merge(defaults, attrs))
+  defp publication(options) do
+    struct!(Publication, Keyword.merge([actions: [:create], signal_type: "test.created"], options))
   end
 
-  defp signal_metadata(signal) do
-    Map.get(signal, :jido_metadata) ||
-      signal
-      |> Map.get(:extensions, %{})
-      |> Map.get("jido_metadata", %{})
+  test "builds all, selected, and primary-key payloads" do
+    data = %ReactiveResource{id: "id-1", name: "Name", status: :draft, secret: "hidden"}
+
+    assert {:ok, all} = SignalFactory.from_notification(notification(data), publication(include: :all))
+    assert all.type == "test.created"
+    assert all.source == "/ash/reactive_resource/create/create"
+    assert all.subject == "/reactive_resource/id-1"
+    assert all.data.name == "Name"
+    refute Map.has_key?(all.data, :secret)
+
+    assert {:ok, selected} =
+             SignalFactory.from_notification(notification(data), publication(include: [:name]))
+
+    assert selected.data == %{name: "Name"}
+
+    assert {:ok, primary_key} =
+             SignalFactory.from_notification(notification(data), publication(include: :primary_key))
+
+    assert primary_key.data == %{id: "id-1"}
+  end
+
+  test "supports nil data and metadata from an Ash changeset" do
+    assert {:ok, signal} =
+             SignalFactory.from_notification(notification(nil), publication(include: :all))
+
+    assert signal.data == %{}
+    assert signal.subject == nil
+
+    old = %ReactiveResource{id: "id-2", name: "Old", status: :draft}
+
+    changeset =
+      old
+      |> Ash.Changeset.for_update(:update, %{name: "New"})
+      |> Ash.Changeset.set_tenant("tenant-1")
+
+    current = %{old | name: "New"}
+
+    publication =
+      publication(
+        include: :changes_only,
+        metadata: [:actor, :tenant, :changes, :previous_state]
+      )
+
+    assert {:ok, signal} =
+             SignalFactory.from_notification(
+               notification(current, changeset: changeset, actor: %{"id" => "actor-1"}),
+               publication
+             )
+
+    assert signal.data.name == "New"
+    assert signal.data.ash_jido.actor_id == "actor-1"
+    assert signal.data.ash_jido.tenant == "tenant-1"
+    assert signal.data.ash_jido.changes == %{name: "New"}
+    assert signal.data.ash_jido.previous_state.name == "Old"
+  end
+
+  test "handles missing fields, string keys, and metadata without a changeset" do
+    assert {:ok, selected} =
+             SignalFactory.from_notification(notification(nil), publication(include: [:name]))
+
+    assert selected.data == %{}
+
+    assert {:ok, primary_key} =
+             SignalFactory.from_notification(notification(nil), publication(include: :pkey_only))
+
+    assert primary_key.data == %{}
+
+    string_data = %{"id" => nil, "name" => "String Name"}
+
+    assert {:ok, signal} =
+             SignalFactory.from_notification(
+               notification(string_data, actor: "system"),
+               publication(
+                 include: [:name, :missing],
+                 metadata: [:actor, :tenant, :changes, :previous_state]
+               )
+             )
+
+    assert signal.subject == nil
+    assert signal.data.name == "String Name"
+    refute Map.has_key?(signal.data, :missing)
+
+    assert signal.data.ash_jido == %{
+             actor_id: "system",
+             changes: %{},
+             previous_state: nil
+           }
   end
 end

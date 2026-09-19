@@ -1,52 +1,39 @@
 defmodule AshJido.Context do
   @moduledoc false
 
-  @optional_passthrough_keys [:authorize?, :tracer, :scope, :context, :timeout]
+  alias AshJido.ActionDescriptor
+
+  @passthrough_keys [:actor, :tenant, :tracer, :scope, :context, :timeout]
 
   @doc false
-  @spec extract_ash_opts!(map(), module(), atom()) :: keyword()
-  def extract_ash_opts!(context, resource, action_name) when is_map(context) do
-    domain = require_domain!(context, resource, action_name)
+  @spec extract_ash_opts!(map(), ActionDescriptor.t()) :: keyword()
+  def extract_ash_opts!(context, %ActionDescriptor{} = descriptor) when is_map(context) do
+    ash_context = Map.get(context, :ash, %{})
 
-    context
-    |> base_opts(domain)
-    |> maybe_add_optional_passthroughs(context)
-  end
+    unless is_map(ash_context) do
+      raise ArgumentError, "AshJido: context.ash must be a map"
+    end
 
-  defp base_opts(context, domain) do
-    [domain: domain]
-    |> maybe_add_if_present(context, :actor)
-    |> maybe_add_if_present(context, :tenant)
-  end
+    if Map.has_key?(ash_context, :domain) or Map.has_key?(ash_context, "domain") do
+      raise ArgumentError, "AshJido: the Ash domain is fixed at compile time"
+    end
 
-  defp maybe_add_optional_passthroughs(ash_opts, context) do
-    Enum.reduce(@optional_passthrough_keys, ash_opts, fn key, opts ->
-      maybe_add_if_present(opts, context, key)
-    end)
-  end
+    if Map.get(ash_context, :authorize?) == false or Map.get(ash_context, "authorize?") == false do
+      raise ArgumentError, "AshJido: context cannot disable Ash authorization"
+    end
 
-  defp maybe_add_if_present(opts, context, key) do
-    if Map.has_key?(context, key) do
-      Keyword.put(opts, key, Map.get(context, key))
+    opts =
+      Enum.reduce(@passthrough_keys, [domain: descriptor.domain], fn key, opts ->
+        case Map.fetch(ash_context, key) do
+          {:ok, value} -> Keyword.put(opts, key, value)
+          :error -> opts
+        end
+      end)
+
+    if Map.get(ash_context, :authorize?) == true or Map.get(ash_context, "authorize?") == true do
+      Keyword.put(opts, :authorize?, true)
     else
       opts
-    end
-  end
-
-  defp require_domain!(context, resource, action_name) do
-    case Map.get(context, :domain) do
-      nil ->
-        case Ash.Resource.Info.domain(resource) do
-          nil ->
-            raise ArgumentError,
-                  "AshJido: :domain must be provided in context for #{inspect(resource)}.#{action_name}"
-
-          domain ->
-            domain
-        end
-
-      domain ->
-        domain
     end
   end
 end

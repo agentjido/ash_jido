@@ -1,159 +1,107 @@
 defmodule AshJido.Error do
   @moduledoc """
-  Facade for converting Ash errors to Jido.Action.Error Splode-based errors.
-
-  This module provides utilities to transform Ash Framework error types into
-  the Jido Action error system, preserving error details and providing
-  consistent error handling across the Ash-Jido integration.
+  Converts Ash failures into a small, redacted Jido Action error surface.
   """
 
   alias Jido.Action.Error
 
-  @doc """
-  Converts an Ash error to a Jido.Action.Error.
+  @doc "Converts an Ash error without exposing Ash internal values."
+  @spec from_ash(term()) :: Exception.t()
+  def from_ash(error) do
+    case category(error) do
+      :invalid_input ->
+        Error.validation_error("Ash action input is invalid", %{
+          reason: :invalid_input,
+          fields: extract_field_errors(error)
+        })
 
-  Pattern matches on different Ash error types and converts them to appropriate
-  Jido error constructors:
+      :not_found ->
+        Error.execution_error("Ash record was not found", %{reason: :not_found})
 
-  - `Ash.Error.Invalid` → validation_error
-  - `Ash.Error.Forbidden` → execution_error with reason :forbidden
-  - `Ash.Error.Framework` → internal_error
-  - `Ash.Error.Unknown` → internal_error
-  - Other exceptions → execution_error
+      :forbidden ->
+        Error.execution_error("Ash action is forbidden", %{reason: :forbidden})
 
-  The original Ash error is preserved in the details map under the `:ash_error` key.
+      :conflict ->
+        Error.execution_error("Ash action has a conflict", %{reason: :conflict})
 
-  ## Examples
+      :timeout ->
+        Error.timeout_error("Ash action timed out", %{reason: :timeout})
 
-      iex> AshJido.Error.from_ash(%Ash.Error.Invalid{errors: []})
-      %Jido.Action.Error.InvalidInputError{...}
-
-      iex> AshJido.Error.from_ash(%Ash.Error.Forbidden{errors: []})
-      %Jido.Action.Error.ExecutionFailureError{...}
-  """
-  @spec from_ash(Exception.t()) :: Exception.t()
-  def from_ash(%Ash.Error.Invalid{} = ash_error) do
-    details = build_details(ash_error)
-    Error.validation_error(Exception.message(ash_error), details)
-  end
-
-  def from_ash(%Ash.Error.Forbidden{} = ash_error) do
-    details = build_details(ash_error) |> Map.put(:reason, :forbidden)
-    Error.execution_error(Exception.message(ash_error), details)
-  end
-
-  def from_ash(%Ash.Error.Framework{} = ash_error) do
-    details = build_details(ash_error)
-    Error.internal_error(Exception.message(ash_error), details)
-  end
-
-  def from_ash(%Ash.Error.Unknown{} = ash_error) do
-    details = build_details(ash_error)
-    Error.internal_error(Exception.message(ash_error), details)
-  end
-
-  def from_ash(ash_error) when is_exception(ash_error) do
-    details = build_details(ash_error)
-    Error.execution_error(Exception.message(ash_error), details)
-  end
-
-  @doc """
-  Extracts the list of underlying errors from an Ash error.
-
-  Ash errors often wrap multiple underlying errors. This function
-  extracts them for detailed error inspection.
-  """
-  @spec extract_underlying_errors(Exception.t()) :: [Exception.t()]
-  def extract_underlying_errors(ash_error) do
-    cond do
-      Map.has_key?(ash_error, :errors) and is_list(ash_error.errors) and ash_error.errors != [] ->
-        ash_error.errors
-
-      Map.has_key?(ash_error, :error) ->
-        [ash_error.error]
-
-      true ->
-        []
+      :internal ->
+        Error.internal_error("Ash action failed", %{reason: :internal})
     end
   end
 
-  @doc """
-  Extracts field-specific errors for validation feedback.
+  @doc false
+  @spec internal(atom(), term()) :: Exception.t()
+  def internal(_kind, _reason) do
+    Error.internal_error("Ash action failed", %{reason: :internal})
+  end
 
-  Returns a map where keys are field names and values are lists of
-  error messages for that field.
-  """
-  @spec extract_field_errors(Exception.t()) :: %{atom() => [String.t()]}
-  def extract_field_errors(ash_error) do
-    ash_error
-    |> extract_underlying_errors()
-    |> Enum.flat_map(fn error ->
-      case error do
-        %{field: field} when not is_nil(field) ->
-          [{field, error_message(error)}]
-
-        %{path: path} when is_list(path) and length(path) > 0 ->
-          field = List.last(path)
-          [{field, error_message(error)}]
-
-        _ ->
-          []
+  @doc "Returns the safe field validation messages in an Ash error."
+  @spec extract_field_errors(term()) :: %{optional(atom()) => [String.t()]}
+  def extract_field_errors(error) do
+    error
+    |> underlying_errors()
+    |> Enum.flat_map(fn nested ->
+      case field_name(nested) do
+        nil -> []
+        field -> [{field, safe_message(nested)}]
       end
     end)
     |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
   end
 
-  @doc """
-  Extracts changeset-specific error information.
+  @doc false
+  @spec extract_underlying_errors(term()) :: [term()]
+  def extract_underlying_errors(error), do: underlying_errors(error)
 
-  Returns a list of maps containing error type, message, and details
-  for errors related to changesets or validations.
-  """
-  @spec extract_changeset_errors(Exception.t()) :: [map()]
-  def extract_changeset_errors(ash_error) do
-    ash_error
-    |> extract_underlying_errors()
-    |> Enum.filter(fn error ->
-      case error do
-        %{__struct__: module} ->
-          change_or_validation_error_module?(module)
+  defp category(%Ash.Error.Forbidden{}), do: :forbidden
+  defp category(%Ash.Error.Invalid{} = error), do: nested_category(error, :invalid_input)
+  defp category(%Ash.Error.Framework{}), do: :internal
+  defp category(%Ash.Error.Unknown{} = error), do: nested_category(error, :internal)
 
-        _ ->
-          false
-      end
-    end)
-    |> Enum.map(fn error ->
-      %{
-        type: error.__struct__,
-        message: Exception.message(error),
-        details: Map.from_struct(error)
-      }
-    end)
+  defp category(error) do
+    module_category(error) || :internal
   end
 
-  defp build_details(ash_error) do
-    underlying_errors = extract_underlying_errors(ash_error)
-
-    %{
-      ash_error: ash_error,
-      underlying_errors: underlying_errors,
-      fields: extract_field_errors(ash_error),
-      changeset_errors: extract_changeset_errors(ash_error)
-    }
+  defp nested_category(error, default) do
+    error
+    |> underlying_errors()
+    |> Enum.find_value(&module_category/1)
+    |> Kernel.||(default)
   end
 
-  defp error_message(%{message: message}) when is_binary(message) and message != "", do: message
-  defp error_message(error) when is_exception(error), do: Exception.message(error)
-  defp error_message(error), do: inspect(error)
+  defp module_category(%{__struct__: module}) do
+    name = inspect(module)
 
-  defp change_or_validation_error_module?(module) when is_atom(module) do
-    case Module.split(module) do
-      ["Ash", "Error", namespace | _]
-      when namespace in ["Changes", "Changeset", "Validation"] ->
-        true
-
-      _ ->
-        false
+    cond do
+      String.contains?(name, "Forbidden") -> :forbidden
+      String.contains?(name, "NotFound") -> :not_found
+      String.contains?(name, "Stale") -> :conflict
+      String.contains?(name, "Conflict") -> :conflict
+      String.contains?(name, "Timeout") -> :timeout
+      String.contains?(name, "Invalid") -> :invalid_input
+      true -> nil
     end
   end
+
+  defp module_category(_error), do: nil
+
+  defp underlying_errors(%{errors: errors}) when is_list(errors) and errors != [] do
+    Enum.flat_map(errors, fn error -> [error | underlying_errors(error)] end)
+  end
+
+  defp underlying_errors(%{error: error}) when not is_nil(error) do
+    [error | underlying_errors(error)]
+  end
+
+  defp underlying_errors(_error), do: []
+
+  defp field_name(%{field: field}) when is_atom(field) and not is_nil(field), do: field
+  defp field_name(%{path: path}) when is_list(path) and path != [], do: List.last(path)
+  defp field_name(_error), do: nil
+
+  defp safe_message(%{message: message}) when is_binary(message) and message != "", do: message
+  defp safe_message(_error), do: "is invalid"
 end

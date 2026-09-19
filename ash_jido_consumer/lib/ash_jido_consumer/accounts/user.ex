@@ -2,7 +2,6 @@ defmodule AshJidoConsumer.Accounts.User do
   use Ash.Resource,
     domain: AshJidoConsumer.Accounts,
     data_layer: AshPostgres.DataLayer,
-    extensions: [AshJido],
     authorizers: [Ash.Policy.Authorizer]
 
   postgres do
@@ -75,19 +74,5 @@ defmodule AshJidoConsumer.Accounts.User do
     policy action_type(:action) do
       authorize_if(always())
     end
-  end
-
-  jido do
-    action(:create,
-      telemetry?: true,
-      category: "ash.consumer.accounts",
-      tags: ["accounts", "write"],
-      vsn: "1.0.0"
-    )
-
-    action(:read, telemetry?: true)
-    action(:inspect_runtime, telemetry?: true)
-    action(:slow_runtime, telemetry?: true)
-    action(:explode, telemetry?: true)
   end
 end

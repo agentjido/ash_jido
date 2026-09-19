@@ -124,7 +124,22 @@ defmodule AshJido.Notifier do
   defp dispatch_signals(_bus, [], _resource, _action_name), do: :ok
 
   defp dispatch_signals(bus, signals, resource, action_name) do
-    _result = AshJido.SignalEmitter.emit_signals(signals, {:ash_jido_bus, bus}, resource, action_name)
+    case Jido.Signal.Bus.publish(bus, signals) do
+      {:ok, _recorded_signals} ->
+        :ok
+
+      {:error, reason} ->
+        :telemetry.execute(
+          [:ash_jido, :signal, :publication_failed],
+          %{count: length(signals)},
+          %{resource: resource, action: action_name, reason: inspect(reason)}
+        )
+
+        Logger.warning(
+          "AshJido.Notifier failed to publish signals for #{inspect(resource)}.#{action_name}: #{inspect(reason)}"
+        )
+    end
+
     :ok
   end
 

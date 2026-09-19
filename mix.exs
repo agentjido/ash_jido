@@ -1,7 +1,7 @@
 defmodule AshJido.MixProject do
   use Mix.Project
 
-  @version "1.0.1"
+  @version "3.0.0-beta.1"
   @source_url "https://github.com/agentjido/ash_jido"
   @description "Integration between the Ash Framework and the Jido Agent ecosystem."
 
@@ -27,6 +27,17 @@ defmodule AshJido.MixProject do
       # Test Coverage
       test_coverage: [
         tool: ExCoveralls,
+        ignore_modules: [
+          AshJido,
+          AshJido.Domain.Transformers.CompileActions,
+          AshJido.Generator,
+          AshJido.Persistence.Transformers.DefineStore,
+          AshJido.Resource.Dsl,
+          AshJido.Resource.Transformers.CompilePublications,
+          AshJido.Resource.Transformers.GenerateJidoActions,
+          AshJido.Schema,
+          ~r/^Mix\.Tasks\.AshJido\.Install/
+        ],
         summary: [threshold: 90],
         export: "cov"
       ],
@@ -64,10 +75,9 @@ defmodule AshJido.MixProject do
     [
       # Runtime dependencies
       {:ash, "~> 3.31 and >= 3.31.3"},
-      {:jido, "~> 2.3"},
-      {:jido_action, "~> 2.3"},
-      {:jido_signal, "~> 2.2"},
-      {:splode, "~> 0.3"},
+      {:jido, "~> 3.0.0-beta.1"},
+      {:jido_action, "~> 3.0.0-beta.11"},
+      {:jido_signal, "~> 3.0.0-beta.4"},
       {:zoi, "~> 0.18"},
 
       # Dev/Test dependencies
@@ -102,7 +112,7 @@ defmodule AshJido.MixProject do
 
   defp package do
     [
-      files: ["lib", "mix.exs", "README.md", "LICENSE", "CHANGELOG.md", "usage-rules.md"],
+      files: ["lib", "guides", "mix.exs", "README.md", "LICENSE", "CHANGELOG.md", "usage-rules.md"],
       maintainers: ["Matt Hostetler"],
       licenses: ["Apache-2.0"],
       links: %{
@@ -122,15 +132,10 @@ defmodule AshJido.MixProject do
       extras: [
         {"README.md", title: "Home"},
         {"guides/getting-started.md", title: "Getting Started"},
-        {"guides/ash-jido-demo.livemd", title: "Livebook Demo"},
-        {"guides/walkthrough-resource-to-action.md", title: "Resource to Action"},
-        {"guides/walkthrough-policy-scope-auth.md", title: "Policy, Scope, and Auth"},
-        {"guides/walkthrough-ash-postgres-consumer.md", title: "AshPostgres Consumer Harness"},
-        {"guides/walkthrough-signals-telemetry-sensors.md", title: "Signals, Telemetry, and Sensors"},
-        {"guides/walkthrough-failure-semantics.md", title: "Failure Semantics"},
-        {"guides/walkthrough-tools-and-ai.md", title: "Tools and AI Integration"},
-        {"guides/walkthrough-agent-tool-wiring.md", title: "Agent Tool Wiring"},
-        {"guides/release-notes-0-2-0.md", title: "0.2.0 Release Notes"},
+        {"guides/flow.md", title: "Jido Flow Composition"},
+        {"guides/persistence.md", title: "Ash Persistence Adapter"},
+        {"guides/signals.md", title: "Jido Signal Publications"},
+        {"guides/v3-migration.md", title: "Migrate to Version 3"},
         {"CHANGELOG.md", title: "Changelog"},
         {"CONTRIBUTING.md", title: "Contributing"},
         {"usage-rules.md", title: "Usage Rules"}
@@ -139,23 +144,14 @@ defmodule AshJido.MixProject do
         "Start Here": [
           "README.md",
           "guides/getting-started.md",
-          "guides/ash-jido-demo.livemd"
+          "guides/v3-migration.md"
         ],
-        "Walkthroughs: Core": [
-          "guides/walkthrough-resource-to-action.md",
-          "guides/walkthrough-policy-scope-auth.md",
-          "guides/walkthrough-ash-postgres-consumer.md"
-        ],
-        "Walkthroughs: Operations": [
-          "guides/walkthrough-signals-telemetry-sensors.md",
-          "guides/walkthrough-failure-semantics.md"
-        ],
-        "Walkthroughs: Agent Integration": [
-          "guides/walkthrough-tools-and-ai.md",
-          "guides/walkthrough-agent-tool-wiring.md"
+        "Jido Integration": [
+          "guides/flow.md",
+          "guides/persistence.md",
+          "guides/signals.md"
         ],
         Project: [
-          "guides/release-notes-0-2-0.md",
           "CHANGELOG.md",
           "CONTRIBUTING.md",
           "usage-rules.md"

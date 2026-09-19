@@ -34,6 +34,7 @@ if Code.ensure_loaded?(Igniter) do
 
     @moduledoc __MODULE__.Docs.long_doc()
 
+    @spec run([String.t()]) :: term()
     use Igniter.Mix.Task
 
     @impl Igniter.Mix.Task
@@ -58,6 +59,7 @@ else
 
     use Mix.Task
 
+    @spec run([String.t()]) :: no_return()
     def run(_argv) do
       Mix.shell().error("""
       The task 'ash_jido.install' requires igniter. Please install igniter and try again.

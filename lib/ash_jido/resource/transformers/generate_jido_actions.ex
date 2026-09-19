@@ -1,165 +1,59 @@
 defmodule AshJido.Resource.Transformers.GenerateJidoActions do
-  @moduledoc """
-  Transformer that generates Jido.Action modules from Ash actions at compile time.
-
-  This transformer runs after the Ash DSL is finalized and creates a Jido.Action
-  module for each configured jido_action.
-  """
+  @moduledoc false
 
   use Spark.Dsl.Transformer
 
+  alias AshJido.Generator
+  alias AshJido.Resource.JidoAction
   alias Spark.Dsl.Transformer
 
-  alias AshJido.Generator
-
-  @doc false
+  @impl Spark.Dsl.Transformer
   def transform(dsl_state) do
-    resource = Transformer.get_persisted(dsl_state, :module)
-    jido_entities = Transformer.get_entities(dsl_state, [:jido])
-
-    case jido_entities do
-      [] ->
-        {:ok, dsl_state}
-
-      entities when is_list(entities) ->
-        try do
-          # Expand all_actions entities into individual jido_action entities
-          expanded_actions = expand_jido_entities(resource, entities, dsl_state)
-          generated_modules = generate_jido_actions(resource, expanded_actions, dsl_state)
-
-          dsl_state =
-            dsl_state
-            |> Transformer.persist(:generated_jido_modules, generated_modules)
-
-          {:ok, dsl_state}
-        rescue
-          error ->
-            {:error, error}
-        end
-    end
-  end
-
-  @doc false
-  def before?(_), do: false
-
-  @doc false
-  def after?(Ash.Resource.Transformers.ValidateRelationshipAttributes), do: true
-  def after?(_), do: false
-
-  defp expand_jido_entities(resource, entities, dsl_state) do
-    Enum.flat_map(entities, fn entity ->
-      case entity do
-        %AshJido.Resource.AllActions{} = all_actions ->
-          expand_all_actions(resource, all_actions, dsl_state)
-
-        %AshJido.Resource.JidoAction{} = jido_action ->
-          [jido_action]
-
-        _ ->
-          []
-      end
-    end)
-  end
-
-  defp expand_all_actions(_resource, all_actions, dsl_state) do
-    # Get the public action boundary by default, with an explicit opt-in for
-    # trusted/internal catalogs that intentionally expose private actions.
-    all_ash_actions = get_all_ash_actions(dsl_state, all_actions.include_private?)
-
-    # Filter based on only/except options
-    filtered_actions = filter_actions(all_ash_actions, all_actions)
-
-    # Convert to JidoAction structs with smart defaults
-    Enum.map(filtered_actions, fn ash_action ->
-      %AshJido.Resource.JidoAction{
-        action: ash_action.name,
-        # Will use smart defaults
-        name: nil,
-        # Will use smart defaults
-        module_name: nil,
-        # Will inherit from ash action
-        description: nil,
-        category: all_actions.category || "ash.#{ash_action.type}",
-        # Additional tags from all_actions
-        tags: all_actions.tags || [],
-        vsn: all_actions.vsn,
-        load: if(ash_action.type == :read, do: all_actions.read_load),
-        allowed_loads: if(ash_action.type == :read, do: all_actions.read_allowed_loads),
-        emit_signals?: all_actions.emit_signals? || false,
-        signal_dispatch: all_actions.signal_dispatch,
-        signal_type: all_actions.signal_type,
-        signal_source: all_actions.signal_source,
-        signal_include: all_actions.signal_include || :pkey_only,
-        telemetry?: all_actions.telemetry? || false,
-        include_private?: all_actions.include_private? || false,
-        output_map?: true,
-        query_params?: if(ash_action.type == :read, do: all_actions.read_query_params?, else: false),
-        max_page_size: if(ash_action.type == :read, do: all_actions.read_max_page_size)
-      }
-    end)
-  end
-
-  defp get_all_ash_actions(dsl_state) do
-    Ash.Resource.Info.public_actions(dsl_state)
-  end
-
-  defp get_all_ash_actions(dsl_state, include_private?) do
-    if include_private? do
-      Transformer.get_entities(dsl_state, [:actions])
+    if Transformer.get_entities(dsl_state, [:resources]) == [] do
+      compile_resource(dsl_state)
     else
-      get_all_ash_actions(dsl_state)
+      {:ok, dsl_state}
     end
+  rescue
+    error -> {:error, error}
   end
 
-  defp filter_actions(ash_actions, %{only: only, except: _except}) when not is_nil(only) do
-    # If 'only' is specified, only include those actions
-    Enum.filter(ash_actions, fn action -> action.name in only end)
+  defp compile_resource(dsl_state) do
+    resource = Transformer.get_persisted(dsl_state, :module)
+
+    actions =
+      dsl_state
+      |> Transformer.get_entities([:jido])
+      |> Enum.filter(&match?(%JidoAction{}, &1))
+
+    validate_unique_modules!(resource, actions, dsl_state)
+
+    modules = Enum.map(actions, &Generator.generate_jido_action_module(resource, &1, dsl_state))
+    descriptors = Enum.map(modules, & &1.__ash_jido__())
+
+    {:ok,
+     dsl_state
+     |> Transformer.persist(:generated_jido_modules, modules)
+     |> Transformer.persist(:ash_jido_descriptors, descriptors)}
   end
 
-  defp filter_actions(ash_actions, %{except: except}) when is_list(except) do
-    # Exclude specified actions
-    Enum.reject(ash_actions, fn action -> action.name in except end)
-  end
-
-  defp filter_actions(ash_actions, _), do: ash_actions
-
-  defp generate_jido_actions(resource, jido_actions, dsl_state) do
-    validate_unique_module_names!(resource, jido_actions, dsl_state)
-
-    Enum.map(jido_actions, fn jido_action ->
-      Generator.generate_jido_action_module(resource, jido_action, dsl_state)
-    end)
-  end
-
-  defp validate_unique_module_names!(resource, jido_actions, dsl_state) do
+  defp validate_unique_modules!(resource, actions, dsl_state) do
     duplicate =
-      jido_actions
-      |> Enum.map(fn jido_action ->
-        {Generator.target_module_name(resource, jido_action, dsl_state), jido_action}
-      end)
-      |> Enum.group_by(
-        fn {module_name, _} -> module_name end,
-        fn {_, jido_action} -> jido_action end
-      )
-      |> Enum.find(fn
-        {_, [_, _ | _]} -> true
-        _ -> false
+      actions
+      |> Enum.map(&Generator.target_module_name(resource, &1, dsl_state))
+      |> Enum.frequencies()
+      |> Enum.find_value(fn
+        {module, count} when count > 1 -> module
+        _entry -> nil
       end)
 
-    case duplicate do
-      nil ->
-        :ok
-
-      {module_name, entries} ->
-        descriptions =
-          Enum.map_join(entries, ", ", fn entry ->
-            "action: #{inspect(entry.action)}, name: #{inspect(entry.name)}"
-          end)
-
-        raise ArgumentError,
-              "AshJido: multiple `jido` entries on #{inspect(resource)} resolve to the same " <>
-                "generated module #{inspect(module_name)} (#{descriptions}). " <>
-                "Give each colliding entry an explicit `module_name:`."
+    if duplicate do
+      raise ArgumentError,
+            "AshJido: multiple declarations on #{inspect(resource)} generate #{inspect(duplicate)}"
     end
   end
+
+  @impl Spark.Dsl.Transformer
+  def after?(Ash.Resource.Transformers.ValidateRelationshipAttributes), do: true
+  def after?(_transformer), do: false
 end

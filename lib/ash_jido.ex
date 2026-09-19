@@ -1,121 +1,57 @@
 defmodule AshJido do
   @moduledoc """
-  Bridge Ash Framework resources with Jido agents.
+  Compiles selected Ash APIs into native Jido v3 Actions.
 
-  Provides two capabilities:
+  Add the extension to an Ash domain and expose its code interfaces:
 
-  1. Generates `Jido.Action` modules from Ash actions at compile time
-  2. Publishes `Jido.Signal` events from Ash notifier lifecycle events
+      defmodule MyApp.Accounts do
+        use Ash.Domain, extensions: [AshJido]
 
-  ## Usage
-
-      defmodule MyApp.Accounts.User do
-        use Ash.Resource,
-          domain: MyApp.Accounts,
-          extensions: [AshJido]
-
-        actions do
-          create :register
-          read :by_id
+        resources do
+          resource MyApp.Accounts.User do
+            define :register_user, action: :register
+            define :get_user, action: :read, get_by: [:id]
+          end
         end
 
         jido do
-          action :register
-          action :by_id, name: "get_user"
+          expose :register_user
+          expose :get_user
         end
       end
 
-  Generated modules can be called with `run/2`:
+  AshJido generates `MyApp.Accounts.Jido.RegisterUser` and
+  `MyApp.Accounts.Jido.GetUser`. Run them through Jido:
 
-      {:ok, user} = MyApp.Accounts.User.Jido.Register.run(
-        %{name: "John"},
-        %{domain: MyApp.Accounts, actor: current_user}
+      Jido.Exec.run(
+        MyApp.Accounts.Jido.RegisterUser,
+        %{name: "Ada", email: "ada@example.com"},
+        %{ash: %{actor: current_user, tenant: tenant}}
       )
 
-  ## Context
+  Each success uses a stable envelope:
 
-  AshJido resolves the Ash domain from `context[:domain]` first, then from the
-  resource's static `domain:` configuration. An `ArgumentError` is raised if
-  neither is available.
+      %{result: public_data, page: nil, metadata: nil}
 
-      context = %{
-        domain: MyApp.Accounts,       # optional override when the resource has a static domain
-        actor: current_user,          # optional: for authorization
-        tenant: "org_123",            # optional: for multi-tenancy
-        authorize?: true,             # optional: explicit authorization mode
-        tracer: [MyApp.Tracer],       # optional: Ash tracer modules
-        scope: MyApp.Scope.for(user), # optional: Ash scope
-        context: %{request_id: "1"},  # optional: Ash action context
-        timeout: 15_000,              # optional: Ash operation timeout
-        signal_dispatch: {:pid, target: self()} # optional: override signal dispatch
-      }
+  The Ash domain is fixed at compile time. A caller cannot replace it or set
+  `authorize?: false`. Sensitive and private resource fields are not present
+  in generated output.
 
-  ## DSL: Individual Actions
+  A resource can use `action :name` as a direct fallback when no domain code
+  interface exists. AshJido also provides `AshJido.Notifier` for explicit
+  Jido Signal publications and `AshJido.Persistence.Adapter` for a
+  user-owned Ash persistence resource.
 
-      jido do
-        action :create
-        action :read, name: "list_users", description: "List all users", load: [:profile]
-        action :update, category: "ash.update", tags: ["user-management"], vsn: "1.0.0"
-        action :special, output_map?: false
-      end
-
-  ## DSL: Bulk Exposure
-
-      jido do
-        all_actions
-        all_actions except: [:destroy]
-        all_actions only: [:create, :read]
-        all_actions include_private?: true
-        all_actions category: "ash.resource", tags: ["public-api"], vsn: "1.0.0"
-        all_actions only: [:read], read_load: [:profile]
-      end
-
-  `all_actions` uses Ash's public API boundary by default and expands only
-  actions with `public?: true`. Set `include_private?: true` only for trusted
-  internal tool catalogs. Generated schemas also omit accepted attributes and
-  action arguments marked `public?: false` unless `include_private?: true` is set.
-
-  ## Action Options
-
-  - `name` - Custom Jido action name (default: auto-generated, e.g. `"create_user"`)
-  - `module_name` - Custom module name (default: `Resource.Jido.ActionName`)
-  - `description` - Action description (default: from Ash action)
-  - `category` - Category for discovery/tool organization
-  - `tags` - List of tags for categorization (default: `[]`)
-  - `vsn` - Optional semantic version identifier for generated action metadata
-  - `output_map?` - Convert output structs to maps (default: `true`)
-  - `include_private?` - Include private inputs in generated schemas for trusted/internal tools (default: `false`)
-  - `load` - Static `Ash.Query.load/2` statement for read actions (default: `nil`)
-  - `allowed_loads` - Allowlisted runtime `load` query parameter entries for read actions (default: `nil`)
-  - `emit_signals?` - Emit Jido signals from Ash notifications on create/update/destroy (default: `false`)
-  - `signal_dispatch` - Default dispatch configuration for emitted signals (default: `nil`)
-  - `signal_type` - Override emitted signal type (default: derived)
-  - `signal_source` - Override emitted signal source (default: derived)
-  - `signal_include` - Data inclusion mode for generated-action signals (default: `:pkey_only`)
-  - `telemetry?` - Emit Jido-namespaced telemetry for generated action execution (default: `false`)
-
-  ## Default Naming
-
-  When `name` is not provided:
-
-  - `:create` → `"create_<resource>"` (e.g. `"create_user"`)
-  - `:read` with name `:read` → `"list_<resources>"` (e.g. `"list_users"`)
-  - `:read` with name `:by_id` → `"get_<resource>_by_id"`
-  - `:update` → `"update_<resource>"`
-  - `:destroy` → `"delete_<resource>"`
-  - custom `:action` → `"<resource>_<action_name>"`
-
-  ## See Also
-
-  - [Getting Started Guide](guides/getting-started.md)
-  - [Usage Rules](usage-rules.md)
-  - `AshJido.Tools` for listing generated actions and exporting `to_tool/0` payloads
+  Use `AshJido.Info.action_modules/1` and `AshJido.Info.descriptors/1` to
+  inspect the compiled bridge.
   """
 
   @sections [AshJido.Resource.Dsl.jido_section()]
 
   use Spark.Dsl.Extension,
     transformers: [
+      AshJido.Persistence.Transformers.DefineStore,
+      AshJido.Domain.Transformers.CompileActions,
       AshJido.Resource.Transformers.GenerateJidoActions,
       AshJido.Resource.Transformers.CompilePublications
     ],

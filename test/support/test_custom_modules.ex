@@ -10,7 +10,7 @@ defmodule AshJido.Test.CustomModules do
   """
 
   use Ash.Resource,
-    domain: nil,
+    domain: AshJido.Test.Domain,
     extensions: [AshJido],
     data_layer: Ash.DataLayer.Ets
 

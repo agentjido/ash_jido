@@ -7,16 +7,24 @@ defmodule AshJido.Info do
     extension: AshJido,
     sections: [:jido]
 
+  @doc "Returns the normalized AshJido descriptors compiled for a resource or domain."
+  @spec descriptors(module()) :: [AshJido.ActionDescriptor.t()]
+  def descriptors(target) when is_atom(target) do
+    Spark.Dsl.Extension.get_persisted(target, :ash_jido_descriptors, [])
+  end
+
+  @doc "Returns the native Jido Action modules compiled for a resource or domain."
+  @spec action_modules(module()) :: [module()]
+  def action_modules(target) when is_atom(target) do
+    target
+    |> descriptors()
+    |> Enum.map(& &1.module)
+  end
+
   @doc "Returns the signal bus configured for the resource"
   @spec signal_bus(Ash.Resource.t()) :: {:ok, term()} | :error
   def signal_bus(resource) do
     Spark.Dsl.Extension.fetch_opt(resource, [:jido], :signal_bus)
-  end
-
-  @doc "Returns the signal prefix configured for the resource"
-  @spec signal_prefix(Ash.Resource.t()) :: {:ok, String.t()} | :error
-  def signal_prefix(resource) do
-    Spark.Dsl.Extension.fetch_opt(resource, [:jido], :signal_prefix)
   end
 
   @doc "Returns all compiled publication configs for the resource"

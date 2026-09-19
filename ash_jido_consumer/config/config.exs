@@ -1,6 +1,7 @@
 import Config
 
 config :ash_jido_consumer, ecto_repos: [AshJidoConsumer.Repo]
+config :ash, default_string_length_count: :codepoints
 
 config :ash_jido_consumer, AshJidoConsumer.Repo,
   migration_primary_key: [name: :id, type: :binary_id],

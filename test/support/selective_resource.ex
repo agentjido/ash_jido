@@ -13,7 +13,7 @@ defmodule AshJido.Test.SelectiveResource do
 
   attributes do
     uuid_primary_key(:id)
-    attribute(:name, :string, allow_nil?: false)
+    attribute(:name, :string, allow_nil?: false, public?: true)
     attribute(:secret, :string)
   end
 
@@ -31,7 +31,6 @@ defmodule AshJido.Test.SelectiveResource do
 
   jido do
     signal_bus(:ash_jido_test_bus)
-    signal_prefix("test")
 
     publish(:create, "test.selective.created", include: [:id, :name])
   end

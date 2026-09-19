@@ -1,8 +1,7 @@
 defmodule AshJidoConsumer.Tenanting.Note do
   use Ash.Resource,
     domain: AshJidoConsumer.Tenanting,
-    data_layer: AshPostgres.DataLayer,
-    extensions: [AshJido]
+    data_layer: AshPostgres.DataLayer
 
   postgres do
     table("tenant_notes")
@@ -27,10 +26,5 @@ defmodule AshJidoConsumer.Tenanting.Note do
     create :create do
       accept([:body])
     end
-  end
-
-  jido do
-    action(:create, telemetry?: true)
-    action(:read, telemetry?: true)
   end
 end

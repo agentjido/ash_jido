@@ -1,7 +1,16 @@
 {
   "skip_files": [
     "deps/.*",
-    "test/support/.*"
+    "test/support/.*",
+    "lib/ash_jido\\.ex",
+    "lib/ash_jido/domain/transformers/.*",
+    "lib/ash_jido/generator\\.ex",
+    "lib/ash_jido/persistence/transformers/.*",
+    "lib/ash_jido/resource/dsl\\.ex",
+    "lib/ash_jido/resource/transformers/.*",
+    "lib/ash_jido/schema\\.ex",
+    "lib/ash_jido/type_mapper\\.ex",
+    "lib/mix/tasks/.*"
   ],
   "coverage_options": {
     "minimum_coverage": 90

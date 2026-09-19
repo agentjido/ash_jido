@@ -1,43 +1,47 @@
 defmodule AshJido.Resource.Dsl do
-  @moduledoc """
-  DSL section definition for the jido section.
-  """
+  @moduledoc false
 
   @metadata_fields [:actor, :tenant, :changes, :previous_state]
-  @publish_action_types [:create, :update, :destroy, :action]
   @include_modes [:pkey_only, :all, :changes_only]
 
   @doc false
-  @spec jido_section() :: struct()
+  @spec jido_section() :: Spark.Dsl.Section.t()
   def jido_section do
     %Spark.Dsl.Section{
       name: :jido,
-      describe: """
-      Configure Ash/Jido integration for this resource.
-      """,
+      describe: "Compile selected Ash APIs into Jido v3 Actions and Signals.",
       schema: [
         signal_bus: [
           type: {:or, [:atom, :mfa]},
           required: false,
-          doc: """
-          The Jido.Signal.Bus server to publish resource-change signals to.
-          Falls back to `config :ash_jido, :signal_bus` if not set.
-          """
-        ],
-        signal_prefix: [
-          type: :string,
-          required: false,
-          doc: """
-          Prefix used for auto-derived signal types.
-          Falls back to `config :ash_jido, :signal_prefix, \"ash\"`.
-          """
+          doc: "Jido.Signal.Bus server used by Ash notifier publications."
         ]
       ],
-      entities: [
-        action_entity(),
-        all_actions_entity(),
-        publish_entity(),
-        publish_all_entity()
+      entities: [expose_entity(), action_entity(), publish_entity(), persistence_store_entity()]
+    }
+  end
+
+  defp expose_entity do
+    %Spark.Dsl.Entity{
+      name: :expose,
+      describe: "Expose one Ash domain code interface as a Jido Action.",
+      target: AshJido.Domain.Exposure,
+      args: [:interface],
+      schema: [
+        interface: [type: :atom, required: true, doc: "Ash code interface name."],
+        name: [type: :string, doc: "Jido Action name. Defaults to the interface name."],
+        module_name: [type: :atom, doc: "Generated module name."],
+        description: [type: :string, doc: "Jido Action description."],
+        identity: identity_schema(),
+        action_parameters: action_parameters_schema(),
+        private_inputs: private_inputs_schema(),
+        select: select_schema(),
+        load: load_schema(),
+        filters: filters_schema(),
+        sorts: sorts_schema(),
+        loads: loads_schema(),
+        pagination: pagination_schema(),
+        schema_overrides: schema_overrides_schema()
       ]
     }
   end
@@ -45,229 +49,31 @@ defmodule AshJido.Resource.Dsl do
   defp action_entity do
     %Spark.Dsl.Entity{
       name: :action,
-      describe: """
-      Expose an Ash action as a Jido action.
-
-      ## Usage Examples
-
-      Simple syntax (uses all defaults):
-      ```elixir
-      jido do
-        action :create
-        action :read
-        action :update
-      end
-      ```
-
-      With custom name and description:
-      ```elixir
-      jido do
-        action :create, name: "create_user", description: "Create a new user account"
-      end
-      ```
-
-      With tags for AI discovery:
-      ```elixir
-      jido do
-        action :read, tags: ["search", "user-management", "public"]
-      end
-      ```
-      """,
+      describe:
+        "Expose an Ash action directly. On a resource, use `action :name`. On a domain, also give the resource and Ash action.",
       target: AshJido.Resource.JidoAction,
-      args: [:action],
+      args: [:action, {:optional, :resource}, {:optional, :ash_action}],
       schema: [
         action: [
           type: :atom,
           required: true,
-          doc: "The name of the Ash action to expose"
+          doc: "Ash action name on a resource, or public Jido name on a domain."
         ],
-        name: [
-          type: :string,
-          doc: "Custom name for the Jido action. Defaults to smart naming: 'resource_action'"
-        ],
-        module_name: [
-          type: :atom,
-          doc: "Custom module name. Defaults to: 'Resource.Jido.ActionName'"
-        ],
-        description: [
-          type: :string,
-          doc: "Description for the Jido action. Inherits from Ash action description if available"
-        ],
-        category: [
-          type: :string,
-          doc: "Category for Jido discovery and tool organization"
-        ],
-        tags: [
-          type: {:list, :string},
-          default: [],
-          doc: "Tags for better categorization and AI discovery. Auto-generates smart defaults"
-        ],
-        vsn: [
-          type: :string,
-          doc: "Optional semantic version identifier for generated action metadata"
-        ],
-        output_map?: [
-          type: :boolean,
-          default: true,
-          doc: "Convert output structs to maps (recommended for AI tools)"
-        ],
-        include_private?: [
-          type: :boolean,
-          default: false,
-          doc:
-            "Include inputs with `public?: false` in the generated schema. Intended only for trusted/internal tool catalogs."
-        ],
-        load: [
-          type: :any,
-          doc: "Static Ash.Query.load statement to apply to generated read actions"
-        ],
-        allowed_loads: [
-          type: :any,
-          doc:
-            "Allowed dynamic Ash.Query.load entries for read actions. When omitted, callers cannot pass a runtime `load` query parameter."
-        ],
-        emit_signals?: [
-          type: :boolean,
-          default: false,
-          doc: "Emit Jido signals from Ash notifications for create/update/destroy actions"
-        ],
-        signal_dispatch: [
-          type: :any,
-          doc: "Default dispatch configuration for emitted signals (override with context[:signal_dispatch])"
-        ],
-        signal_type: [
-          type: :string,
-          doc: "Override the emitted signal type"
-        ],
-        signal_source: [
-          type: :string,
-          doc: "Override the emitted signal source"
-        ],
-        signal_include: [
-          type: {:or, [{:in, @include_modes}, {:list, :atom}]},
-          required: false,
-          default: :pkey_only,
-          doc: "Data inclusion mode for signals emitted directly by generated Jido actions."
-        ],
-        telemetry?: [
-          type: :boolean,
-          default: false,
-          doc: "Emit telemetry spans for generated action execution"
-        ],
-        query_params?: [
-          type: :boolean,
-          required: false,
-          doc: """
-          Enable query parameters (filter, sort, limit, offset, load) for read actions.
-          Defaults to `true` for read actions. When enabled, the generated Jido action
-          accepts query parameters using Ash's safe input parsing (filter_input, sort_input).
-          """
-        ],
-        max_page_size: [
-          type: :pos_integer,
-          required: false,
-          doc: "Maximum page size (limit) for this action. Used to enforce query bounds at runtime."
-        ]
-      ]
-    }
-  end
-
-  defp all_actions_entity do
-    %Spark.Dsl.Entity{
-      name: :all_actions,
-      describe: """
-      Expose all Ash actions as Jido actions with smart defaults.
-
-      This creates Jido actions for public create, read, update, destroy, and custom
-      actions defined on the resource, using intelligent naming and categorization.
-
-      ## Usage
-
-      ```elixir
-      jido do
-        all_actions
-        # Optionally exclude specific actions
-        all_actions except: [:internal_action, :admin_only]
-      end
-      ```
-      """,
-      target: AshJido.Resource.AllActions,
-      args: [],
-      schema: [
-        except: [
-          type: {:list, :atom},
-          default: [],
-          doc: "List of action names to exclude from auto-generation"
-        ],
-        only: [
-          type: {:list, :atom},
-          doc: "If specified, only generate actions for these action names"
-        ],
-        include_private?: [
-          type: :boolean,
-          default: false,
-          doc: "Include actions and inputs with `public?: false`. Intended only for trusted/internal tool catalogs."
-        ],
-        category: [
-          type: :string,
-          doc: "Category override applied to generated actions. Defaults to ash.<action_type> when omitted"
-        ],
-        tags: [
-          type: {:list, :string},
-          default: [],
-          doc: "Additional tags to add to all generated actions"
-        ],
-        vsn: [
-          type: :string,
-          doc: "Optional semantic version identifier applied to generated action metadata"
-        ],
-        read_load: [
-          type: :any,
-          doc: "Static Ash.Query.load statement applied to all auto-generated read actions"
-        ],
-        read_allowed_loads: [
-          type: :any,
-          doc:
-            "Allowed dynamic Ash.Query.load entries for all auto-generated read actions. When omitted, callers cannot pass a runtime `load` query parameter."
-        ],
-        emit_signals?: [
-          type: :boolean,
-          default: false,
-          doc: "Emit Jido signals from Ash notifications for generated create/update/destroy actions"
-        ],
-        signal_dispatch: [
-          type: :any,
-          doc: "Default dispatch configuration for emitted signals (override with context[:signal_dispatch])"
-        ],
-        signal_type: [
-          type: :string,
-          doc: "Override emitted signal type for generated actions"
-        ],
-        signal_source: [
-          type: :string,
-          doc: "Override emitted signal source for generated actions"
-        ],
-        signal_include: [
-          type: {:or, [{:in, @include_modes}, {:list, :atom}]},
-          required: false,
-          default: :pkey_only,
-          doc: "Data inclusion mode for signals emitted directly by generated Jido actions."
-        ],
-        telemetry?: [
-          type: :boolean,
-          default: false,
-          doc: "Emit telemetry spans for generated action execution"
-        ],
-        read_query_params?: [
-          type: :boolean,
-          default: true,
-          doc: "Enable query parameters for auto-generated read actions."
-        ],
-        read_max_page_size: [
-          type: :pos_integer,
-          required: false,
-          doc: "Maximum page size for auto-generated read actions."
-        ]
+        resource: [type: :atom, doc: "Ash resource for a domain direct-action declaration."],
+        ash_action: [type: :atom, doc: "Ash action for a domain direct-action declaration."],
+        name: [type: :string, doc: "Jido Action name override."],
+        module_name: [type: :atom, doc: "Generated module name."],
+        description: [type: :string, doc: "Jido Action description."],
+        identity: identity_schema(),
+        action_parameters: action_parameters_schema(),
+        private_inputs: private_inputs_schema(),
+        select: select_schema(),
+        load: load_schema(),
+        filters: filters_schema(),
+        sorts: sorts_schema(),
+        loads: loads_schema(),
+        pagination: pagination_schema(),
+        schema_overrides: schema_overrides_schema()
       ]
     }
   end
@@ -275,86 +81,78 @@ defmodule AshJido.Resource.Dsl do
   defp publish_entity do
     %Spark.Dsl.Entity{
       name: :publish,
-      describe: """
-      Publish a Jido signal when matching Ash actions complete.
-
-      ## Examples
-
-          publish :create
-          publish :create, "blog.post.created", include: [:id, :title]
-          publish [:publish, :archive], "blog.post.updated", include: :changes_only
-      """,
+      describe: "Publish one Jido Signal after matching Ash actions complete.",
       target: AshJido.Publication,
       args: [:actions, {:optional, :signal_type}],
       schema: [
-        actions: [
-          type: {:or, [:atom, {:list, :atom}]},
-          required: true,
-          doc: "Action name or list of action names that trigger this publication."
-        ],
-        signal_type: [
-          type: :string,
-          required: false,
-          doc: "Explicit signal type. If omitted, AshJido derives one as `{prefix}.{resource}.{action}`."
-        ],
+        actions: [type: {:or, [:atom, {:list, :atom}]}, required: true],
+        signal_type: [type: :string, required: true],
         include: [
           type: {:or, [{:in, @include_modes}, {:list, :atom}]},
           required: false,
-          default: :pkey_only,
-          doc: "Data inclusion mode for signal payloads."
+          default: :pkey_only
         ],
         metadata: [
           type: {:list, {:in, @metadata_fields}},
           required: false,
-          default: [],
-          doc: "Additional metadata fields to include in `signal.extensions.jido_metadata`."
+          default: []
         ],
-        condition: [
-          type: {:fun, 1},
-          required: false,
-          doc: "Optional predicate function. Signal publishes only when it returns true."
-        ]
+        condition: [type: {:fun, 1}, required: false]
       ]
     }
   end
 
-  defp publish_all_entity do
+  defp persistence_store_entity do
     %Spark.Dsl.Entity{
-      name: :publish_all,
-      describe: """
-      Publish a Jido signal for all actions of a given action type.
-
-      ## Examples
-
-          publish_all :update
-          publish_all :destroy, "blog.post.deleted"
-      """,
-      target: AshJido.Resource.PublishAll,
-      args: [:action_type, {:optional, :signal_type}],
-      schema: [
-        action_type: [
-          type: {:in, @publish_action_types},
-          required: true,
-          doc: "Ash action type to expand into publications."
-        ],
-        signal_type: [
-          type: :string,
-          required: false,
-          doc: "Explicit signal type override for generated publications."
-        ],
-        include: [
-          type: {:or, [{:in, @include_modes}, {:list, :atom}]},
-          required: false,
-          default: :pkey_only,
-          doc: "Data inclusion mode for signal payloads."
-        ],
-        metadata: [
-          type: {:list, {:in, @metadata_fields}},
-          required: false,
-          default: [],
-          doc: "Additional metadata fields to include in `signal.extensions.jido_metadata`."
-        ]
-      ]
+      name: :persistence_store,
+      describe: "Mark this resource as a Jido byte persistence store.",
+      target: AshJido.Persistence.Store,
+      args: [],
+      schema: []
     }
+  end
+
+  defp identity_schema do
+    [
+      type: {:or, [:atom, {:list, :atom}, {:literal, false}]},
+      required: false,
+      doc: "Named Ash identity, explicit identity fields, or false for no record identity."
+    ]
+  end
+
+  defp action_parameters_schema do
+    [type: {:list, :atom}, required: false, doc: "Explicit Ash action inputs."]
+  end
+
+  defp private_inputs_schema do
+    [type: {:list, :atom}, required: false, default: [], doc: "Explicit private Ash inputs."]
+  end
+
+  defp select_schema do
+    [type: {:list, :atom}, required: false, doc: "Static Ash select list."]
+  end
+
+  defp load_schema do
+    [type: :any, required: false, doc: "Static Ash load statement."]
+  end
+
+  defp filters_schema do
+    [type: {:list, :atom}, required: false, default: [], doc: "Allowed filter fields."]
+  end
+
+  defp sorts_schema do
+    [type: {:list, :atom}, required: false, default: [], doc: "Allowed sort fields."]
+  end
+
+  defp loads_schema do
+    [type: :any, required: false, default: [], doc: "Allowed run-time load statements."]
+  end
+
+  defp pagination_schema do
+    [type: :keyword_list, required: false, doc: "Explicit pagination controls."]
+  end
+
+  defp schema_overrides_schema do
+    [type: :map, required: false, default: %{}, doc: "Zoi schemas keyed by input name."]
   end
 end

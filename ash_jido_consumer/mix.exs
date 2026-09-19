@@ -34,6 +34,7 @@ defmodule AshJidoConsumer.MixProject do
       {:ecto_sql, "~> 3.13"},
       {:postgrex, ">= 0.0.0"},
       {:picosat_elixir, "~> 0.2", only: [:dev, :test], runtime: false},
+      {:sourceror, "~> 1.7", only: [:dev, :test], runtime: false},
       {:ash_jido, path: ".."}
     ]
   end

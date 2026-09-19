@@ -23,6 +23,6 @@ defmodule AshJido.Test.NoBusResource do
   end
 
   jido do
-    publish(:create)
+    publish(:create, "test.no_bus.created")
   end
 end

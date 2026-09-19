@@ -10,7 +10,7 @@ defmodule AshJido.Test.MultiJidoItem do
   """
 
   use Ash.Resource,
-    domain: nil,
+    domain: AshJido.Test.Domain,
     extensions: [AshJido],
     data_layer: Ash.DataLayer.Ets
 
@@ -43,8 +43,7 @@ defmodule AshJido.Test.MultiJidoItem do
     action(:read,
       name: "get_multi_item",
       module_name: AshJido.Test.MultiJidoItem.Jido.GetMultiItem,
-      description: "Get one multi item",
-      query_params?: true
+      description: "Get one multi item"
     )
   end
 end

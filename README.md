@@ -4,373 +4,192 @@
 [![Hex Docs](https://img.shields.io/badge/hex-docs-lightgreen.svg)](https://hexdocs.pm/ash_jido/)
 [![CI](https://github.com/agentjido/ash_jido/actions/workflows/ci.yml/badge.svg)](https://github.com/agentjido/ash_jido/actions/workflows/ci.yml)
 [![License](https://img.shields.io/hexpm/l/ash_jido.svg)](https://github.com/agentjido/ash_jido/blob/main/LICENSE)
-[![Website](https://img.shields.io/badge/website-jido.run-0f172a.svg)](https://jido.run)
-[![Ecosystem](https://img.shields.io/badge/ecosystem-jido.run-0ea5e9.svg)](https://jido.run/ecosystem)
-[![Discord](https://img.shields.io/badge/discord-join-5865F2.svg?logo=discord&logoColor=white)](https://jido.run/discord)
 
-Bridge Ash Framework resources with Jido agents. Generates `Jido.Action` modules from Ash actions at compile time.
+AshJido compiles selected Ash APIs into native Jido v3 Actions. It keeps Ash as the source of business rules, authorization, and data access. It uses Jido for execution, Flow orchestration, Agents, and persistence lifecycle.
 
-## What This Library Does
+## Main features
 
-- Adds a `jido` DSL section to Ash resources
-- Generates `Jido.Action` modules at compile time for selected actions
-- Maps Ash argument types to NimbleOptions schemas
-- Runs actions via Ash with the provided or resource-configured `domain`, `actor`, and `tenant`
-- Converts Ash errors to `Jido.Action.Error` (Splode-based) errors
-- Publishes `Jido.Signal` events from Ash action notifications
+- Domain-first compilation from Ash code interfaces
+- Resource action fallback for APIs that do not have code interfaces
+- Static Zoi input and output schemas
+- Native execution with `Jido.Exec`
+- Native composition with `Jido.Flow`
+- Fixed compile-time domains and namespaced Ash context
+- Public, non-sensitive result serialization
+- Explicit filter, sort, load, and pagination allowlists
+- Ash-backed Jido persistence with atomic compare-and-swap
+- Ash notifier publications to a Jido Signal bus
 
-## What It Does Not Do
-
-- Auto-discover domains outside Ash resource configuration
-- Bypass Ash authorization, policies, or data layers
+AshJido does not add a second Action, Flow, Agent, or Signal runtime.
 
 ## Installation
+
+Add AshJido to `mix.exs`:
+
+```elixir
+def deps do
+  [
+    {:ash_jido, "~> 3.0.0-beta.1"}
+  ]
+end
+```
+
+Or use Igniter:
 
 ```bash
 mix igniter.install ash_jido
 ```
 
-Or add manually to `mix.exs`:
+Version 3 uses the Hex releases of `jido`, `jido_action`, and `jido_signal` version 3.
+
+## Define the Ash API
+
+Define normal Ash actions and public domain code interfaces:
 
 ```elixir
-def deps do
-  [
-    {:ash_jido, "~> 0.2.0"}
-  ]
+defmodule MyApp.Accounts.User do
+  use Ash.Resource,
+    domain: MyApp.Accounts,
+    data_layer: AshPostgres.DataLayer
+
+  attributes do
+    uuid_primary_key :id
+    attribute :name, :string, allow_nil?: false, public?: true
+    attribute :email, :string, allow_nil?: false, public?: true
+    attribute :secret, :string, sensitive?: true
+  end
+
+  actions do
+    defaults [:read]
+
+    create :register do
+      accept [:name, :email]
+    end
+  end
+end
+
+defmodule MyApp.Accounts do
+  use Ash.Domain, extensions: [AshJido]
+
+  resources do
+    resource MyApp.Accounts.User do
+      define :register_user, action: :register
+      define :get_user, action: :read, get_by: [:id]
+      define :list_users, action: :read
+    end
+  end
+
+  jido do
+    expose :register_user
+    expose :get_user
+
+    expose :list_users,
+      filters: [:email],
+      sorts: [:name],
+      pagination: [type: :offset, max_page_size: 100]
+  end
 end
 ```
 
-## Quick Start
+This creates these normal Jido Actions:
+
+- `MyApp.Accounts.Jido.RegisterUser`
+- `MyApp.Accounts.Jido.GetUser`
+- `MyApp.Accounts.Jido.ListUsers`
+
+## Run a generated Action
 
 ```elixir
-defmodule MyApp.User do
+{:ok, output} =
+  Jido.Exec.run(
+    MyApp.Accounts.Jido.RegisterUser,
+    %{name: "Ada", email: "ada@example.com"},
+    %{ash: %{actor: current_user, tenant: tenant}}
+  )
+
+%{
+  result: %{id: id, name: "Ada", email: "ada@example.com"},
+  page: nil,
+  metadata: nil
+} = output
+```
+
+The domain is part of the generated descriptor. Run-time context can contain these `context.ash` values:
+
+- `actor`
+- `tenant`
+- `scope`
+- `tracer`
+- `context`
+- `timeout`
+- `authorize?: true`
+
+A caller cannot supply a different domain or set `authorize?: false`.
+
+## Stable contracts
+
+Generated Actions use static Zoi schemas. Unsupported custom Ash types fail at compile time unless the exposure supplies a `schema_overrides` entry.
+
+All successful calls return this shape:
+
+```elixir
+%{
+  result: result,
+  page: page_or_nil,
+  metadata: metadata_or_nil
+}
+```
+
+Ash resource structs become maps. The serializer includes public, non-sensitive fields only. It omits unloaded and forbidden fields.
+
+## Resource fallback
+
+Use the extension on a resource when a code interface is not available:
+
+```elixir
+defmodule MyApp.Accounts.User do
   use Ash.Resource,
     domain: MyApp.Accounts,
     extensions: [AshJido]
 
-  actions do
-    create :register
-    read :by_id
-    update :profile
-  end
-
   jido do
-    action :register, name: "create_user"
-    action :by_id, name: "get_user"
-    action :profile
+    action :register
+    action :update_profile, identity: :unique_email
   end
 end
 ```
 
-Generated modules:
+This form generates modules under `MyApp.Accounts.User.Jido`.
+
+## Jido Flow
+
+Generated modules are normal Jido Actions. Use them directly in `Jido.Flow`:
 
 ```elixir
-{:ok, user} = MyApp.User.Jido.Register.run(
-  %{name: "John", email: "john@example.com"},
-  %{domain: MyApp.Accounts}
-)
+alias Jido.Flow.Builder
+
+{:ok, flow} =
+  Builder.new(name: "register_and_fetch")
+  |> Builder.step("register", MyApp.Accounts.Jido.RegisterUser, %{
+    name: Builder.input(:name),
+    email: Builder.input(:email)
+  })
+  |> Builder.step("fetch", MyApp.Accounts.Jido.GetUser, %{
+    id: Builder.result("register", [:result, :id])
+  })
+  |> Builder.output(Builder.result("fetch"))
+  |> Builder.build()
+
+Jido.Exec.run(flow, %{name: "Ada", email: "ada@example.com"}, context)
 ```
 
-## Query Parameters
-
-Generated Jido read actions include optional query parameters for filtering, sorting, and pagination:
-
-```elixir
-{:ok, users} = MyApp.User.Jido.Read.run(
-  %{
-    filter: %{status: %{in: ["active", "pending"]}},
-    sort: [name: :asc, created_at: :desc],
-    limit: 20,
-    offset: 40
-  },
-  %{domain: MyApp.Accounts}
-)
-```
-
-**Available Parameters:**
-
-- `filter` (map) — Filter using Ash's filter input syntax: `%{name: "fred"}`, `%{age: %{greater_than: 25}}`
-- `sort` (any) — Sort via JSON-style entries `[%{"field" => "name", "direction" => "asc"}]`, keyword list `[name: :asc]`, or string `"name,-age"`
-- `limit` (pos_integer) — Maximum results to return
-- `offset` (non_neg_integer) — Results to skip (for pagination)
-- `load` (any) — Optional runtime relationship/calculation loads, available only when the action configures `allowed_loads`
-
-**Security:** Query parameters use Ash's safe `filter_input`/`sort_input` variants, which only allow filtering and sorting on public attributes and honor field policies. Runtime `load` is disabled unless explicitly allowlisted.
-
-**Configuration:**
-
-```elixir
-jido do
-  action :read                            # query params enabled by default
-  action :read, query_params?: false      # opt out
-  action :read, allowed_loads: [:profile] # opt into runtime load
-  action :read, max_page_size: 100        # clamp limit to max
-  all_actions read_query_params?: true    # default for all read actions
-  all_actions read_allowed_loads: [:profile]
-  all_actions read_max_page_size: 100     # max page size for all reads
-end
-```
-
-## Context Requirements
-
-AshJido resolves the Ash domain in this order:
-
-1. `context[:domain]`
-2. the resource's static `domain:` configuration
-3. `ArgumentError` if neither is available
-
-```elixir
-context = %{
-  domain: MyApp.Accounts,       # required only when the resource has no static domain or you need an override
-  actor: current_user,          # optional: for authorization
-  tenant: "org_123",            # optional: for multi-tenancy
-  authorize?: true,             # optional: explicit authorization mode
-  tracer: [MyApp.Tracer],       # optional: Ash tracer modules
-  scope: MyApp.Scope.for(user), # optional: Ash scope
-  context: %{request_id: "1"},  # optional: Ash action context
-  timeout: 15_000,              # optional: Ash operation timeout
-  signal_dispatch: {:pid, target: self()} # optional: override signal dispatch
-}
-
-MyApp.User.Jido.Create.run(params, context)
-```
-
-## DSL Options
-
-### Individual Actions
-
-```elixir
-jido do
-  action :create
-  action :read, name: "list_users", description: "List all users", load: [:profile]
-  action :update, category: "ash.update", tags: ["user-management"], vsn: "1.0.0"
-  action :special, output_map?: false  # preserve Ash structs
-end
-```
-
-Default generated module names are based on the Ash action name, e.g.
-`action :create` generates `Resource.Jido.Create` even when `name:` is set.
-Use `module_name:` to intentionally choose a different generated module, and
-provide explicit `module_name:` values when exposing the same Ash action more
-than once.
-
-### Bulk Exposure
-
-`all_actions` follows Ash's public API boundary by default: it expands only actions
-marked `public?: true`. Explicit `action :name` entries remain the way to expose a
-specific private action deliberately, and `include_private?: true` is available for
-trusted/internal tool catalogs. Generated schemas also follow Ash's public input
-boundary by default and omit accepted attributes or action arguments marked
-`public?: false`.
-
-```elixir
-jido do
-  all_actions
-  all_actions except: [:destroy, :internal]
-  all_actions only: [:create, :read]
-  all_actions include_private?: true
-  all_actions category: "ash.resource"
-  all_actions tags: ["public-api"]
-  all_actions vsn: "1.0.0"
-  all_actions only: [:read], read_load: [:profile]
-end
-```
-
-### Reactive Signals
-
-The canonical Ash integration path is `AshJido.Notifier`: add it to the resource and configure
-publications in `jido` when you want resource lifecycle events published to a Jido signal bus:
-
-```elixir
-defmodule MyApp.Post do
-  use Ash.Resource,
-    domain: MyApp.Blog,
-    extensions: [AshJido],
-    notifiers: [AshJido.Notifier]
-
-  jido do
-    signal_bus MyApp.SignalBus
-    signal_prefix "blog"
-
-    publish :create, "blog.post.created",
-      include: [:id, :title],
-      metadata: [:actor, :tenant]
-
-    publish_all :update, include: :changes_only
-  end
-end
-```
-
-Generated actions can also emit signals with `emit_signals?: true`; this is best when a tool run
-needs runtime dispatch overrides or telemetry signal counters. Both paths build payloads through
-`AshJido.SignalFactory`, so signal type/source/subject and `signal.extensions["jido_metadata"]`
-are consistent. Generated-action signals include primary key data by default; use
-`signal_include` to explicitly widen `signal.data`. Notifier publications use the configured
-`include` mode.
-
-### Action Options
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `name` | string | auto-generated | Custom Jido action name |
-| `module_name` | atom | `Resource.Jido.Action` | Custom module name |
-| `description` | string | from Ash action | Action description |
-| `category` | string | `nil` | Category for discovery/tool organization |
-| `tags` | list(string) | `[]` | Tags for categorization |
-| `vsn` | string | `nil` | Optional semantic version metadata |
-| `output_map?` | boolean | `true` | Convert structs to public-field maps |
-| `include_private?` | boolean | `false` | Include inputs with `public?: false` in generated schemas for trusted/internal tools |
-| `load` | term | `nil` | Static `Ash.Query.load/2` for read actions |
-| `allowed_loads` | term | `nil` | Allowlisted runtime `load` entries for read actions |
-| `query_params?` | boolean | `true` | Enable query parameters (filter, sort, limit, offset, and allowlisted load) for read actions |
-| `max_page_size` | pos_integer | `nil` | Maximum limit value for read actions (clamps the limit parameter) |
-| `emit_signals?` | boolean | `false` | Emit Jido signals from Ash notifications (create/update/destroy) |
-| `signal_dispatch` | term | `nil` | Default signal dispatch config (can be overridden via context) |
-| `signal_type` | string | derived | Override emitted signal type |
-| `signal_source` | string | derived | Override emitted signal source |
-| `signal_include` | atom/list(atom) | `:pkey_only` | Data inclusion mode for generated-action signals |
-| `telemetry?` | boolean | `false` | Emit Jido-namespaced telemetry for generated action execution |
-
-### all_actions Options
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `only` | list(atom) | all public actions | Limit generated actions |
-| `except` | list(atom) | `[]` | Exclude actions |
-| `include_private?` | boolean | `false` | Include Ash actions and inputs with `public?: false` for trusted/internal tool catalogs |
-| `category` | string | `ash.<action_type>` | Category added to generated actions |
-| `tags` | list(string) | `[]` | Tags added to all generated actions |
-| `vsn` | string | `nil` | Optional semantic version metadata for generated actions |
-| `read_load` | term | `nil` | Static `Ash.Query.load/2` for generated read actions |
-| `read_query_params?` | boolean | `true` | Enable query parameters for generated read actions |
-| `read_max_page_size` | pos_integer | `nil` | Maximum limit value for generated read actions |
-| `emit_signals?` | boolean | `false` | Emit Jido signals from generated create/update/destroy actions |
-| `signal_dispatch` | term | `nil` | Default signal dispatch config for generated actions |
-| `signal_type` | string | derived | Override emitted signal type |
-| `signal_source` | string | derived | Override emitted signal source |
-| `telemetry?` | boolean | `false` | Emit Jido-namespaced telemetry for generated action execution |
-
-## Telemetry
-
-Telemetry is opt-in per action (or via `all_actions`):
-
-```elixir
-jido do
-  action :create, telemetry?: true
-end
-```
-
-When enabled, generated actions emit:
-
-- `[:jido, :action, :ash_jido, :start]`
-- `[:jido, :action, :ash_jido, :stop]`
-- `[:jido, :action, :ash_jido, :exception]`
-
-Metadata includes resource/action/module identity, domain/tenant, actor presence, signaling/read-load flags, and signal delivery counters.
-
-## Tool Export Helpers
-
-Use `AshJido.Tools` to list generated actions and export LLM-friendly tool maps:
-
-```elixir
-# Generated action modules for a resource
-AshJido.Tools.actions(MyApp.Accounts.User)
-
-# Generated action modules for all resources in a domain
-AshJido.Tools.actions(MyApp.Accounts)
-
-# Tool payloads (name/description/schema/function) for agent/LLM integrations
-AshJido.Tools.tools(MyApp.Accounts.User)
-```
-
-## Sensor Bridge
-
-`AshJido.SensorDispatchBridge` keeps the dispatch-first signal model while adding optional sensor runtime forwarding:
-
-```elixir
-# Accepts %Jido.Signal{}, {:signal, %Jido.Signal{}}, and {:signal, {:ok, %Jido.Signal{}}}
-:ok = AshJido.SensorDispatchBridge.forward(signal_message, sensor_runtime)
-
-# Batch forwarding with per-message errors
-%{forwarded: count, errors: errors} =
-  AshJido.SensorDispatchBridge.forward_many(messages, sensor_runtime)
-
-# Ignore non-signal mailbox noise safely
-:ok | :ignored | {:error, :runtime_unavailable} =
-  AshJido.SensorDispatchBridge.forward_or_ignore(message, sensor_runtime)
-```
-
-### Default Naming
-
-| Action Type | Pattern | Example |
-|-------------|---------|---------|
-| `:create` | `create_<resource>` | `create_user` |
-| `:read` (`:read`) | `list_<resources>` | `list_users` |
-| `:read` (`:by_id`) | `get_<resource>_by_id` | `get_user_by_id` |
-| `:update` | `update_<resource>` | `update_user` |
-| `:destroy` | `delete_<resource>` | `delete_user` |
-
-Generated schemas are the public tool surface for discovery and validation. Ash
-authorization, policies, and runtime validation remain the source of truth when an
-action executes.
-
-## Troubleshooting
-
-**`AshJido: :domain must be provided in context`**
-- Pass `%{domain: MyApp.Domain}` as the second argument to `run/2`, or configure `domain: MyApp.Domain` on the Ash resource
-
-**`Update actions require primary key parameter(s): ...`**
-- Include the resource's primary key field or fields in params for `:update` and `:destroy` actions
-- Resources with the default `[:id]` primary key continue to use `id`
-- Destroy actions also include and pass through any declared Ash destroy action arguments
-
-**`Action X not found in resource`**
-- Check `jido action :...` entries match defined Ash actions
-
-For a full error contract and telemetry interpretation, see [Walkthrough: Failure Semantics](guides/walkthrough-failure-semantics.md).
-
-## Compatibility
-
-- Elixir: ~> 1.18
-- OTP: 27 or 28
-- Ash: ~> 3.12
-- Jido: ~> 2.2
-- Jido Action: ~> 2.2
-- Jido Signal: ~> 2.1
-
-## Documentation
-
-**Start Here**
-- [Getting Started](guides/getting-started.md) — comprehensive usage
-- [Interactive Demo](guides/ash-jido-demo.livemd) — try in Livebook
-
-**Walkthroughs: Core**
-- [Resource to Action](guides/walkthrough-resource-to-action.md) — define resources and run generated actions
-- [Policy, Scope, and Authorization](guides/walkthrough-policy-scope-auth.md) — policy-aware actor, scope, tenant patterns
-- [AshPostgres Consumer Harness](guides/walkthrough-ash-postgres-consumer.md) — real DB-backed integration scenarios
-
-**Walkthroughs: Operations**
-- [Signals, Telemetry, and Sensors](guides/walkthrough-signals-telemetry-sensors.md) — notification signals and observability
-- [Failure Semantics](guides/walkthrough-failure-semantics.md) — deterministic errors and telemetry outcomes
-
-**Walkthroughs: Agent Integration**
-- [Tools and AI Integration](guides/walkthrough-tools-and-ai.md) — action metadata and tool export
-- [Agent Tool Wiring](guides/walkthrough-agent-tool-wiring.md) — domain tool catalogs and safe execution wrappers
-
-**Reference**
-- [Usage Rules](usage-rules.md) — AI/LLM patterns
-
-## Real Consumer Integration App
-
-A full AshPostgres-backed consumer harness lives at `ash_jido_consumer/`.
-
-It exercises real integration scenarios end-to-end:
-
-- context passthrough + policy behavior
-- relationship-aware reads (`load`)
-- notifications to signals (`emit_signals?`)
-- Jido telemetry emission (`telemetry?`)
-
-## License
-
-Apache-2.0
+AshJido does not provide a Flow wrapper. Flow steps keep separate Ash transaction boundaries. Design compensation in the Flow when a later step can fail.
+
+## More guides
+
+- [Getting started](guides/getting-started.md)
+- [Jido Flow composition](guides/flow.md)
+- [Ash persistence adapter](guides/persistence.md)
+- [Jido Signal publications](guides/signals.md)
+- [Migration from AshJido v1](guides/v3-migration.md)
+- [Usage rules](usage-rules.md)

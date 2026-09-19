@@ -1,82 +1,72 @@
 defmodule AshJido.Resource.Transformers.CompilePublications do
-  @moduledoc """
-  Compile-time transformer that validates and compiles signal publications.
-
-  Responsibilities:
-  - validate `publish` actions exist on the resource
-  - expand `publish_all` declarations into concrete action publications
-  - normalize publication action names to lists
-  - persist compiled publications for runtime lookup
-  """
+  @moduledoc false
 
   use Spark.Dsl.Transformer
 
+  alias AshJido.Publication
   alias Spark.Dsl.Transformer
 
-  @doc false
+  @impl Spark.Dsl.Transformer
   def transform(dsl_state) do
+    if Transformer.get_entities(dsl_state, [:resources]) == [] do
+      compile_resource(dsl_state)
+    else
+      {:ok, dsl_state}
+    end
+  rescue
+    error -> {:error, error}
+  end
+
+  defp compile_resource(dsl_state) do
     resource = Transformer.get_persisted(dsl_state, :module)
     actions = Transformer.get_entities(dsl_state, [:actions])
-    action_names = actions |> Enum.map(& &1.name) |> MapSet.new()
-    jido_entities = Transformer.get_entities(dsl_state, [:jido])
+    action_names = MapSet.new(actions, & &1.name)
 
-    explicit_publications =
-      jido_entities
-      |> Enum.filter(&match?(%AshJido.Publication{}, &1))
-      |> Enum.map(fn publication ->
-        %AshJido.Publication{} = publication
-        actions_list = List.wrap(publication.actions)
-
-        Enum.each(actions_list, fn action_name ->
-          unless MapSet.member?(action_names, action_name) do
-            raise Spark.Error.DslError,
-              module: resource,
-              path: [:jido, :publish],
-              message: """
-              Action #{inspect(action_name)} referenced in `publish` does not exist on #{inspect(resource)}.
-
-              Available actions: #{inspect(MapSet.to_list(action_names))}
-              """
-          end
-        end)
-
-        %AshJido.Publication{
-          actions: actions_list,
-          signal_type: publication.signal_type,
-          include: publication.include,
-          metadata: publication.metadata,
-          condition: publication.condition
-        }
-      end)
-
-    expanded_publications =
-      jido_entities
-      |> Enum.filter(&match?(%AshJido.Resource.PublishAll{}, &1))
-      |> Enum.flat_map(fn publish_all ->
-        %AshJido.Resource.PublishAll{} = publish_all
-
-        actions
-        |> Enum.filter(&(&1.type == publish_all.action_type))
-        |> Enum.map(fn action ->
-          %AshJido.Publication{
-            actions: [action.name],
-            signal_type: publish_all.signal_type,
-            include: publish_all.include,
-            metadata: publish_all.metadata,
-            condition: nil
-          }
-        end)
-      end)
-
-    publications = explicit_publications ++ expanded_publications
+    publications =
+      dsl_state
+      |> Transformer.get_entities([:jido])
+      |> Enum.filter(&match?(%Publication{}, &1))
+      |> Enum.map(&validate_publication!(&1, resource, action_names, dsl_state))
 
     {:ok, Transformer.persist(dsl_state, :jido_publications, publications)}
   end
 
-  @doc false
-  def before?(_), do: false
+  defp validate_publication!(publication, resource, action_names, dsl_state) do
+    actions = List.wrap(publication.actions)
 
-  @doc false
+    Enum.each(actions, fn action ->
+      unless MapSet.member?(action_names, action) do
+        raise ArgumentError,
+              "AshJido: signal publication action #{inspect(action)} does not exist on #{inspect(resource)}"
+      end
+    end)
+
+    unless is_binary(publication.signal_type) and publication.signal_type != "" do
+      raise ArgumentError,
+            "AshJido: signal publication for #{inspect(resource)} requires an explicit signal type"
+    end
+
+    validate_include!(publication.include, resource, dsl_state)
+    %{publication | actions: actions}
+  end
+
+  defp validate_include!(fields, resource, dsl_state) when is_list(fields) do
+    attributes =
+      dsl_state
+      |> Transformer.get_entities([:attributes])
+      |> Map.new(&{&1.name, &1})
+
+    Enum.each(fields, fn field ->
+      case Map.get(attributes, field) do
+        %{public?: true, sensitive?: false} -> :ok
+        _other -> raise ArgumentError, "AshJido: signal field #{inspect(field)} is not public on #{inspect(resource)}"
+      end
+    end)
+  end
+
+  defp validate_include!(_mode, _resource, _dsl_state), do: :ok
+
+  @impl Spark.Dsl.Transformer
   def after?(Ash.Resource.Transformers.ValidateRelationshipAttributes), do: true
-  def after?(_), do: false
+  def after?(_transformer), do: false
 end

@@ -2,7 +2,8 @@ defmodule AshJidoConsumer.Content.Post do
   use Ash.Resource,
     domain: AshJidoConsumer.Content,
     data_layer: AshPostgres.DataLayer,
-    extensions: [AshJido]
+    extensions: [AshJido],
+    notifiers: [AshJido.Notifier]
 
   postgres do
     table("posts")
@@ -36,16 +37,19 @@ defmodule AshJidoConsumer.Content.Post do
   end
 
   jido do
-    action(:create,
-      emit_signals?: true,
-      telemetry?: true,
-      signal_include: [:id, :title],
-      signal_type: "ash_jido_consumer.content.post.created",
-      signal_source: "/ash_jido_consumer/content/post"
+    action(:create)
+    action(:read, load: [:author])
+    action(:update)
+    action(:destroy)
+
+    signal_bus(:ash_jido_consumer_bus)
+
+    publish(:create, "ash_jido_consumer.content.post.created",
+      include: [:id, :title],
+      metadata: [:actor]
     )
 
-    action(:read, load: [:author], telemetry?: true)
-    action(:update, emit_signals?: true, telemetry?: true, signal_include: [:id, :title])
-    action(:destroy, emit_signals?: true, telemetry?: true)
+    publish(:update, "ash_jido_consumer.content.post.updated", include: [:id, :title])
+    publish(:destroy, "ash_jido_consumer.content.post.destroyed", include: :pkey_only)
   end
 end

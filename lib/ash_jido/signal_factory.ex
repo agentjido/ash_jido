@@ -2,14 +2,10 @@ defmodule AshJido.SignalFactory do
   @moduledoc """
   Converts Ash notifier notifications into `Jido.Signal` structs.
 
-  Auto-derived signal types follow:
-
-      {prefix}.{resource_short_name}.{action_name}
-
-  Prefix resolution order:
-  1. resource-level `jido signal_prefix` DSL option
-  2. `config :ash_jido, :signal_prefix`
-  3. default `"ash"`
+  Signal payloads contain only explicitly selected public, non-sensitive
+  resource fields. Optional structured Ash metadata is stored under the
+  `:ash_jido` data key because CloudEvents extensions accept scalar values
+  only.
   """
 
   alias Ash.Notifier.Notification
@@ -24,59 +20,17 @@ defmodule AshJido.SignalFactory do
   @spec from_notification(Notification.t(), Publication.t()) ::
           {:ok, Signal.t()} | {:error, reason()}
   def from_notification(%Notification{} = notification, %Publication{} = publication) do
-    build_signal(notification, publication, source: nil)
-  end
+    signal_data =
+      notification
+      |> build_signal_data(publication)
+      |> put_ash_metadata(build_metadata(notification, publication))
 
-  @spec from_notification(Notification.t(), map()) ::
-          {:ok, Signal.t()} | {:error, reason()}
-  def from_notification(%Notification{} = notification, signal_config) when is_map(signal_config) do
-    publication = %Publication{
-      actions: [notification.action.name],
-      signal_type: Map.get(signal_config, :signal_type),
-      include: Map.get(signal_config, :signal_include, :pkey_only) || :pkey_only,
-      metadata: []
-    }
-
-    build_signal(notification, publication, source: Map.get(signal_config, :signal_source))
-  end
-
-  defp build_signal(%Notification{} = notification, %Publication{} = publication, opts) do
-    signal_type = resolve_signal_type(notification, publication)
-    signal_data = build_signal_data(notification, publication)
-    signal_source = Keyword.get(opts, :source) || build_source(notification)
-    signal_metadata = build_metadata(notification, publication)
-
-    with {:ok, signal} <-
-           Signal.new(%{
-             type: signal_type,
-             source: signal_source,
-             data: signal_data,
-             subject: subject_from_notification(notification)
-           }) do
-      {:ok, put_jido_metadata(signal, signal_metadata)}
-    end
-  end
-
-  defp resolve_signal_type(_notification, %Publication{signal_type: explicit})
-       when is_binary(explicit),
-       do: explicit
-
-  defp resolve_signal_type(%Notification{} = notification, _publication) do
-    prefix = resource_prefix(notification.resource)
-    short_name = resource_short_name(notification.resource)
-    action_name = notification.action.name
-
-    "#{prefix}.#{short_name}.#{action_name}"
-  end
-
-  defp resource_prefix(resource) do
-    case AshJido.Info.signal_prefix(resource) do
-      {:ok, prefix} when is_binary(prefix) and prefix != "" ->
-        prefix
-
-      _ ->
-        Application.get_env(:ash_jido, :signal_prefix, "ash")
-    end
+    Signal.new(%{
+      type: publication.signal_type,
+      source: build_source(notification),
+      data: signal_data,
+      subject: subject_from_notification(notification)
+    })
   end
 
   defp resource_short_name(resource) do
@@ -105,7 +59,7 @@ defmodule AshJido.SignalFactory do
 
   defp extract_all_attributes(%Notification{data: data, resource: resource}) do
     resource
-    |> Ash.Resource.Info.attributes()
+    |> public_signal_attributes()
     |> Enum.reduce(%{}, fn attribute, acc ->
       case fetch_value(data, attribute.name) do
         {:ok, value} -> Map.put(acc, attribute.name, normalize_value(value))
@@ -115,8 +69,14 @@ defmodule AshJido.SignalFactory do
   end
 
   defp extract_changes(%Notification{changeset: %Ash.Changeset{} = changeset} = notification) do
+    allowed =
+      notification.resource
+      |> public_signal_attributes()
+      |> MapSet.new(& &1.name)
+
     changeset
     |> Map.get(:attributes, %{})
+    |> Enum.filter(fn {key, _value} -> MapSet.member?(allowed, key) end)
     |> Enum.reduce(%{}, fn {key, value}, acc ->
       resolved_value =
         case fetch_value(notification.data, key) do
@@ -185,14 +145,7 @@ defmodule AshJido.SignalFactory do
   end
 
   defp build_metadata(%Notification{} = notification, %Publication{} = publication) do
-    base = %{
-      ash_resource: notification.resource,
-      ash_action: notification.action.name,
-      ash_action_type: notification.action.type,
-      timestamp: DateTime.utc_now()
-    }
-
-    base
+    %{}
     |> maybe_add_actor(notification, publication)
     |> maybe_add_tenant(notification, publication)
     |> maybe_add_changes(notification, publication)
@@ -241,7 +194,7 @@ defmodule AshJido.SignalFactory do
       previous_state =
         case notification do
           %Notification{changeset: %Ash.Changeset{data: data}} when not is_nil(data) ->
-            normalize_value(data)
+            AshJido.Serializer.serialize(data)
 
           _ ->
             nil
@@ -268,57 +221,14 @@ defmodule AshJido.SignalFactory do
 
   defp fetch_value(_, _), do: :error
 
-  defp normalize_value(%Date{} = value), do: value
-  defp normalize_value(%Time{} = value), do: value
-  defp normalize_value(%NaiveDateTime{} = value), do: value
-  defp normalize_value(%DateTime{} = value), do: value
-  defp normalize_value(list) when is_list(list), do: Enum.map(list, &normalize_value/1)
+  defp normalize_value(value), do: AshJido.Serializer.serialize(value)
 
-  defp normalize_value(%_{} = struct) do
-    module = struct.__struct__
+  defp put_ash_metadata(data, metadata) when map_size(metadata) == 0, do: data
+  defp put_ash_metadata(data, metadata), do: Map.put(data, :ash_jido, metadata)
 
-    case Atom.to_string(module) do
-      "Elixir.Ash.CiString" ->
-        Map.get(struct, :string)
-
-      _ ->
-        struct
-        |> Map.from_struct()
-        |> Enum.reduce(%{}, fn {key, value}, acc ->
-          if internal_key?(key) do
-            acc
-          else
-            Map.put(acc, key, normalize_value(value))
-          end
-        end)
-    end
-  end
-
-  defp normalize_value(map) when is_map(map) do
-    Enum.reduce(map, %{}, fn {key, value}, acc ->
-      Map.put(acc, key, normalize_value(value))
-    end)
-  end
-
-  defp normalize_value(value), do: value
-
-  defp internal_key?(key) when is_atom(key) do
-    key
-    |> Atom.to_string()
-    |> String.starts_with?("__")
-  end
-
-  defp internal_key?(_), do: false
-
-  defp put_jido_metadata(signal, metadata) do
-    extensions =
-      signal
-      |> Map.get(:extensions, %{})
-      |> case do
-        map when is_map(map) -> map
-        _ -> %{}
-      end
-
-    Map.put(signal, :extensions, Map.put(extensions, "jido_metadata", metadata))
+  defp public_signal_attributes(resource) do
+    resource
+    |> Ash.Resource.Info.public_attributes()
+    |> Enum.reject(& &1.sensitive?)
   end
 end

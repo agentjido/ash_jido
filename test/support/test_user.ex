@@ -4,12 +4,12 @@ defmodule AshJido.Test.User do
   """
 
   use Ash.Resource,
-    domain: nil,
+    domain: AshJido.Test.Domain,
     extensions: [AshJido],
     data_layer: Ash.DataLayer.Ets
 
   ets do
-    private?(true)
+    private?(false)
   end
 
   attributes do
@@ -18,6 +18,7 @@ defmodule AshJido.Test.User do
     attribute(:email, :string, allow_nil?: false, public?: true)
     attribute(:age, :integer, public?: true)
     attribute(:active, :boolean, default: true, public?: true)
+    attribute(:secret, :string, public?: true, sensitive?: true)
     timestamps()
   end
 
@@ -58,12 +59,19 @@ defmodule AshJido.Test.User do
     # Generic action example
     action :deactivate do
       description("Deactivate a user account")
+      returns(:map)
       argument(:reason, :string)
 
       run(fn input, context ->
         # This would be a custom implementation
         {:ok, %{message: "User deactivated", reason: input.arguments.reason}}
       end)
+    end
+  end
+
+  calculations do
+    calculate :double_value, :integer, expr(^arg(:value) * 2) do
+      argument(:value, :integer, allow_nil?: false)
     end
   end
 
@@ -76,7 +84,7 @@ defmodule AshJido.Test.User do
     )
 
     action(:read)
-    action(:update_age, name: "update_user_age", output_map?: true)
+    action(:update_age, name: "update_user_age")
     action(:destroy, name: "delete_user")
     action(:archive, name: "archive_user")
     action(:deactivate, name: "deactivate_user")
