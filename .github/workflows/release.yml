@@ -56,5 +56,6 @@ jobs:
       hex_dry_run: ${{ inputs.hex_dry_run || false }}
       skip_tests: ${{ inputs.skip_tests || false }}
       version_override: ${{ inputs.version_override || '' }}
+      release_command: .github/scripts/git-ops-release
     secrets:
       HEX_API_KEY: ${{ secrets.HEX_API_KEY }}

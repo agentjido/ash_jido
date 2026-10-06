@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+args=()
+override=""
+dry_run=false
+
+while (($# > 0)); do
+  case "$1" in
+    --override)
+      if (($# < 2)); then
+        echo "Missing value for --override." >&2
+        exit 2
+      fi
+
+      override="${2#v}"
+      args+=("--override" "$override")
+      shift 2
+      ;;
+    --override=*)
+      override="${1#--override=}"
+      override="${override#v}"
+      args+=("--override=$override")
+      shift
+      ;;
+    --dry-run)
+      dry_run=true
+      args+=("$1")
+      shift
+      ;;
+    *)
+      args+=("$1")
+      shift
+      ;;
+  esac
+done
+
+mix git_ops.release --yes "${args[@]}"
+
+if [[ -n "$override" && "$dry_run" == false ]]; then
+  bare_tag="refs/tags/$override"
+  release_tag="refs/tags/v$override"
+
+  if git show-ref --verify --quiet "$release_tag"; then
+    echo "Release tag $release_tag already exists." >&2
+    exit 1
+  fi
+
+  if ! git show-ref --verify --quiet "$bare_tag"; then
+    echo "GitOps did not create the expected tag $bare_tag." >&2
+    exit 1
+  fi
+
+  tag_object="$(git rev-parse "$bare_tag")"
+  git update-ref "$release_tag" "$tag_object"
+  git update-ref -d "$bare_tag" "$tag_object"
+fi
