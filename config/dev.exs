@@ -7,5 +7,6 @@ config :git_ops,
   changelog_file: "CHANGELOG.md",
   repository_url: "https://github.com/agentjido/ash_jido",
   manage_mix_version?: true,
+  version_source: :tags,
   github_handle_lookup?: false,
   version_tag_prefix: "v"
