@@ -23,6 +23,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- changelog -->
 
+## [3.0.0-beta.1](https://github.com/agentjido/ash_jido/compare/v1.0.1...v3.0.0-beta.1) (2026-10-06)
+### Breaking Changes:
+
+* add Jido v3 integration by mikehostetler
+
+
+
+### Bug Fixes:
+
+* ci: normalize GitOps release tags by mikehostetler
+
+* ci: derive release version from git tags by mikehostetler
+
+* support latest Jido Action beta by mikehostetler
+
+* deps: update vulnerable dependencies (#110) by mikehostetler
+
 ## [1.0.1](https://github.com/agentjido/ash_jido/compare/v1.0.1...1.0.1) (2026-08-12)
 
 
