@@ -166,21 +166,27 @@ This form generates modules under `MyApp.Accounts.User.Jido`.
 Generated modules are normal Jido Actions. Use them directly in `Jido.Flow`:
 
 ```elixir
-alias Jido.Flow.Builder
+defmodule MyApp.Flows.RegisterAndFetch do
+  use Jido.Flow, name: "register_and_fetch"
 
-{:ok, flow} =
-  Builder.new(name: "register_and_fetch")
-  |> Builder.step("register", MyApp.Accounts.Jido.RegisterUser, %{
-    name: Builder.input(:name),
-    email: Builder.input(:email)
-  })
-  |> Builder.step("fetch", MyApp.Accounts.Jido.GetUser, %{
-    id: Builder.result("register", [:result, :id])
-  })
-  |> Builder.output(Builder.result("fetch"))
-  |> Builder.build()
+  flow do
+    step "register",
+      action: MyApp.Accounts.Jido.RegisterUser,
+      params: %{name: input(:name), email: input(:email)}
 
-Jido.Exec.run(flow, %{name: "Ada", email: "ada@example.com"}, context)
+    step "fetch",
+      action: MyApp.Accounts.Jido.GetUser,
+      params: %{id: result("register", [:result, :id])}
+
+    output result("fetch")
+  end
+end
+
+Jido.Exec.run(
+  MyApp.Flows.RegisterAndFetch,
+  %{name: "Ada", email: "ada@example.com"},
+  context
+)
 ```
 
 AshJido does not provide a Flow wrapper. Flow steps keep separate Ash transaction boundaries. Design compensation in the Flow when a later step can fail.

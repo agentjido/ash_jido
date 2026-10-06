@@ -5,23 +5,30 @@ AshJido generates normal Jido Actions. A `Jido.Flow` step can call a generated A
 ## Sequential work
 
 ```elixir
-alias Jido.Flow.Builder
+defmodule MyApp.Flows.RegisterAndFetch do
+  use Jido.Flow, name: "register_and_fetch"
 
-{:ok, flow} =
-  Builder.new(name: "register_and_fetch")
-  |> Builder.step("register", MyApp.Accounts.Jido.RegisterUser, %{
-    name: Builder.input(:name),
-    email: Builder.input(:email)
-  })
-  |> Builder.step("fetch", MyApp.Accounts.Jido.GetUser, %{
-    id: Builder.result("register", [:result, :id])
-  })
-  |> Builder.output(Builder.result("fetch"))
-  |> Builder.build()
+  flow do
+    step "register",
+      action: MyApp.Accounts.Jido.RegisterUser,
+      params: %{
+        name: input(:name),
+        email: input(:email)
+      }
+
+    step "fetch",
+      action: MyApp.Accounts.Jido.GetUser,
+      params: %{
+        id: result("register", [:result, :id])
+      }
+
+    output result("fetch")
+  end
+end
 
 {:ok, %{result: user}} =
   Jido.Exec.run(
-    flow,
+    MyApp.Flows.RegisterAndFetch,
     %{name: "Ada", email: "ada@example.com"},
     %{ash: %{actor: current_user}}
   )
@@ -34,21 +41,26 @@ The generated Action result envelope is part of the Flow contract. In this examp
 Steps without data or control dependencies can run in parallel:
 
 ```elixir
-{:ok, flow} =
-  Builder.new(name: "parallel_scores")
-  |> Builder.step("left", MyApp.Accounts.Jido.ScoreUser, %{
-    value: Builder.input(:left)
-  })
-  |> Builder.step("right", MyApp.Accounts.Jido.ScoreUser, %{
-    value: Builder.input(:right)
-  })
-  |> Builder.output(%{
-    left: Builder.result("left", [:result]),
-    right: Builder.result("right", [:result])
-  })
-  |> Builder.build()
+defmodule MyApp.Flows.ParallelScores do
+  use Jido.Flow, name: "parallel_scores"
 
-Jido.Exec.run(flow, %{left: 3, right: 5}, context, max_concurrency: 2)
+  flow do
+    step "left",
+      action: MyApp.Accounts.Jido.ScoreUser,
+      params: %{value: input(:left)}
+
+    step "right",
+      action: MyApp.Accounts.Jido.ScoreUser,
+      params: %{value: input(:right)}
+
+    output %{
+      left: result("left", :result),
+      right: result("right", :result)
+    }
+  end
+end
+
+Jido.Exec.run(MyApp.Flows.ParallelScores, %{left: 3, right: 5}, context, max_concurrency: 2)
 ```
 
 ## Context

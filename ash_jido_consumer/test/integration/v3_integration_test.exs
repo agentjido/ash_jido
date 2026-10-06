@@ -6,7 +6,27 @@ defmodule AshJidoConsumer.V3IntegrationTest do
   alias AshJidoConsumer.Content.Author
   alias AshJidoConsumer.Content.Post
   alias AshJidoConsumer.Tenanting
-  alias Jido.Flow.Builder
+
+  defmodule CreateAndFetchFlow do
+    use Jido.Flow, name: "consumer_create_and_fetch"
+
+    flow do
+      step "create",
+        action: AshJidoConsumer.Accounts.Jido.CreateUser,
+        params: %{
+          name: input(:name),
+          email: input(:email)
+        }
+
+      step "fetch",
+        action: AshJidoConsumer.Accounts.Jido.GetUser,
+        params: %{
+          id: result("create", [:result, :id])
+        }
+
+      output result("fetch")
+    end
+  end
 
   setup do
     start_supervised!({Jido.Signal.Bus, name: :ash_jido_consumer_bus})
@@ -46,25 +66,10 @@ defmodule AshJidoConsumer.V3IntegrationTest do
   end
 
   test "generated Actions compose in a native Jido Flow" do
-    flow =
-      Builder.new(name: "consumer_create_and_fetch")
-      |> Builder.step("create", Accounts.Jido.CreateUser, %{
-        name: Builder.input(:name),
-        email: Builder.input(:email)
-      })
-      |> Builder.step("fetch", Accounts.Jido.GetUser, %{
-        id: Builder.result("create", [:result, :id])
-      })
-      |> Builder.output(Builder.result("fetch"))
-      |> then(fn builder ->
-        assert {:ok, flow} = Builder.build(builder)
-        flow
-      end)
-
     email = unique_email("flow")
 
     assert {:ok, %{result: %{email: ^email}}} =
-             Jido.Exec.run(flow, %{name: "Flow User", email: email}, %{
+             Jido.Exec.run(CreateAndFetchFlow, %{name: "Flow User", email: email}, %{
                ash: %{actor: %{id: "actor-2"}}
              })
   end
@@ -84,8 +89,7 @@ defmodule AshJidoConsumer.V3IntegrationTest do
                context
              )
 
-    assert_receive {:signal,
-                    %Jido.Signal{type: "ash_jido_consumer.content.post.created"} = signal}
+    assert_receive {:signal, %Jido.Signal{type: "ash_jido_consumer.content.post.created"} = signal}
 
     assert signal.data.id == post.id
     assert signal.data.title == "Loaded Post"

@@ -74,11 +74,12 @@ defmodule AshJido.MixProject do
   defp deps do
     [
       # Runtime dependencies
-      {:ash, "~> 3.31 and >= 3.31.3"},
+      {:ash, "~> 3.31 and >= 3.34.4"},
       {:jido, "~> 3.0.0-beta.1"},
-      {:jido_action, "~> 3.0.0-beta.11"},
+      {:jido_action, "~> 3.0.0-beta.12"},
       {:jido_signal, "~> 3.0.0-beta.4"},
-      {:zoi, "~> 0.18"},
+      # Pin until Jido Action supports the current Zoi release.
+      {:zoi, "0.18.7"},
 
       # Dev/Test dependencies
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
