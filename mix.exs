@@ -64,8 +64,7 @@ defmodule AshJido.MixProject do
     [
       # Runtime dependencies
       {:ash, "~> 3.31 and >= 3.31.3"},
-      {:jido,
-       git: "https://github.com/agentjido/jido.git", ref: "0c8853bf451a40330b7192c9d2200a06f9c61261", override: true},
+      {:jido, "~> 2.4", override: true},
       {:jido_action, "~> 2.3"},
       {:jido_signal, "~> 2.3 and >= 2.3.1"},
       {:splode, "~> 0.3"},
