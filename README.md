@@ -371,6 +371,10 @@ It exercises real integration scenarios end-to-end:
 - notifications to signals (`emit_signals?`)
 - Jido telemetry emission (`telemetry?`)
 
+## Local Documentation
+
+Run `mix docs` to generate HTML and Markdown documentation in `doc/`, including Markdown pages and `llms.txt`.
+
 ## License
 
 Apache-2.0
