@@ -43,7 +43,7 @@ defmodule AshJido.Resource.Transformers.GenerateJidoActions do
   def before?(_), do: false
 
   @doc false
-  def after?(Ash.Resource.Transformers.ValidateRelationshipAttributes), do: true
+  def after?(Ash.Resource.Transformers.SetPrimaryActions), do: true
   def after?(_), do: false
 
   defp expand_jido_entities(resource, entities, dsl_state) do

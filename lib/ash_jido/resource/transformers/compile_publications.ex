@@ -77,6 +77,6 @@ defmodule AshJido.Resource.Transformers.CompilePublications do
   def before?(_), do: false
 
   @doc false
-  def after?(Ash.Resource.Transformers.ValidateRelationshipAttributes), do: true
+  def after?(Ash.Resource.Transformers.SetPrimaryActions), do: true
   def after?(_), do: false
 end
