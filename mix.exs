@@ -75,11 +75,11 @@ defmodule AshJido.MixProject do
     [
       # Runtime dependencies
       {:ash, "~> 3.31 and >= 3.34.4"},
-      {:jido, "~> 3.0.0-beta.1"},
-      {:jido_action, "~> 3.0.0-beta.12"},
-      {:jido_signal, "~> 3.0.0-beta.4"},
-      # Pin until Jido Action supports the current Zoi release.
-      {:zoi, "0.18.7"},
+      # Use the tested release/v3 contract until the next coordinated Hex release.
+      {:jido, github: "agentjido/jido", ref: "bdd610e92f9f4f4d7cf554f158db51d16beecc40", override: true},
+      {:jido_action, github: "agentjido/jido_action", ref: "ae7266893c9eb47b10a4c2f711bdc517abf269ac", override: true},
+      {:jido_signal, github: "agentjido/jido_signal", ref: "7b825f1d050a0e0159bb2a72ba79c100b5d362d3", override: true},
+      {:zoi, "~> 0.18.11"},
 
       # Dev/Test dependencies
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},

@@ -54,6 +54,6 @@ defmodule AshJido.Resource.Transformers.GenerateJidoActions do
   end
 
   @impl Spark.Dsl.Transformer
-  def after?(Ash.Resource.Transformers.ValidateRelationshipAttributes), do: true
+  def after?(Ash.Resource.Transformers.SetPrimaryActions), do: true
   def after?(_transformer), do: false
 end

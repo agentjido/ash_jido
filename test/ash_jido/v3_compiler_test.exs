@@ -13,7 +13,7 @@ defmodule AshJido.V3CompilerTest do
              Domain.Jido.DoubleValue
            ]
 
-    assert Enum.all?(modules, &match?({:ok, _executable}, Jido.Executable.resolve(&1)))
+    assert Enum.all?(modules, &match?({:ok, %Runic.Workflow{}}, Jido.Exec.compile(&1)))
     assert Enum.all?(modules, &(Code.ensure_loaded?(&1) and function_exported?(&1, :validate_params, 1)))
     assert Enum.all?(modules, &function_exported?(&1, :validate_output, 1))
 

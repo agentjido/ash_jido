@@ -67,6 +67,6 @@ defmodule AshJido.Resource.Transformers.CompilePublications do
   defp validate_include!(_mode, _resource, _dsl_state), do: :ok
 
   @impl Spark.Dsl.Transformer
-  def after?(Ash.Resource.Transformers.ValidateRelationshipAttributes), do: true
+  def after?(Ash.Resource.Transformers.SetPrimaryActions), do: true
   def after?(_transformer), do: false
 end
