@@ -25,3 +25,4 @@ jobs:
       credo_command: mix credo --min-priority higher
       docs_command: mix docs -f html
       test_command: mix test
+      validate_hex_package: ${{ github.ref != 'refs/heads/release/v3' }}
