@@ -46,6 +46,7 @@ defmodule AshJido.PersistenceAdapterTest do
     assert {:ok, "maintenance", _token} = Adapter.get(key, opts)
     assert :ok = Adapter.delete(key, opts)
     assert {:error, :not_found} = Adapter.get(key, opts)
+    assert :ok = Adapter.delete(key, opts)
   end
 
   test "a stale token cannot replace a later write", %{key: key, opts: opts} do

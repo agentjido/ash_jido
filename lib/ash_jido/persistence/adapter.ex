@@ -104,19 +104,11 @@ defmodule AshJido.Persistence.Adapter do
   def delete(key, opts) when is_binary(key) and is_list(opts) do
     with :ok <- validate_options(opts) do
       resource = Keyword.fetch!(opts, :resource)
+      operation_opts = operation_opts(resource, opts)
 
-      result =
-        resource
-        |> Ash.Query.filter(key == ^key)
-        |> Ash.bulk_destroy(
-          @destroy_action,
-          %{},
-          bulk_opts(resource, opts, return_records?: true)
-        )
-
-      case result do
-        %Ash.BulkResult{status: status} when status in [:success, :partial_success] -> :ok
-        %Ash.BulkResult{} = result -> {:error, {:indeterminate, bulk_reason(result)}}
+      case Ash.get(resource, key, Keyword.merge(operation_opts, action: @read_action, not_found_error?: false)) do
+        {:ok, record} -> delete_record(record, operation_opts)
+        {:error, error} -> {:error, {:indeterminate, safe_reason(error)}}
       end
     else
       {:error, reason} -> {:error, {:rejected, reason}}
@@ -128,6 +120,16 @@ defmodule AshJido.Persistence.Adapter do
   end
 
   def delete(_key, _opts), do: {:error, {:rejected, :invalid_arguments}}
+
+  defp delete_record(nil, _opts), do: :ok
+
+  defp delete_record(record, opts) do
+    case Ash.destroy(record, Keyword.put(opts, :action, @destroy_action)) do
+      :ok -> :ok
+      {:ok, _record} -> :ok
+      {:error, error} -> {:error, {:indeterminate, safe_reason(error)}}
+    end
+  end
 
   defp do_compare_and_swap(key, :not_found, value, opts) do
     resource = Keyword.fetch!(opts, :resource)
