@@ -7,8 +7,8 @@ defmodule AshJidoConsumer.PersistenceTest do
   defmodule Counter do
     use Jido.Agent, name: "ash_jido_persistence_counter"
 
-    agent do
-      schema(Zoi.object(%{count: Zoi.integer() |> Zoi.default(0)}))
+    state do
+      schema(Jido.Joi.object(%{count: Zoi.integer() |> Zoi.default(0)}))
     end
   end
 
@@ -22,29 +22,63 @@ defmodule AshJidoConsumer.PersistenceTest do
     assert :ok = AshJido.Persistence.StoreInfo.validate(JidoStore)
   end
 
+  test "writes remain visible after a non-sandbox connection is returned", %{opts: opts} do
+    key = "committed-#{Jido.Id.uuid7()}"
+    repo = AshJidoConsumer.Repo
+
+    on_exit(fn ->
+      Ecto.Adapters.SQL.Sandbox.unboxed_run(repo, fn -> Adapter.delete(key, opts) end)
+    end)
+
+    token =
+      Ecto.Adapters.SQL.Sandbox.unboxed_run(repo, fn ->
+        refute repo.in_transaction?()
+        assert :ok = Adapter.compare_and_swap(key, :not_found, "committed", opts)
+        assert {:ok, "committed", token} = Adapter.get(key, opts)
+        token
+      end)
+
+    Ecto.Adapters.SQL.Sandbox.unboxed_run(repo, fn ->
+      refute repo.in_transaction?()
+      assert {:ok, "committed", ^token} = Adapter.get(key, opts)
+      assert :ok = Adapter.compare_and_swap(key, {:token, token}, "next", opts)
+      assert {:error, :conflict} = Adapter.compare_and_swap(key, {:token, token}, "stale", opts)
+    end)
+  end
+
   test "Jido can save, load, and delete an agent through the Ash adapter", %{
     key: key,
     opts: opts
   } do
     store = {Adapter, opts}
-    agent = Counter.new!(id: key, state: %{count: 7})
+    agent = Counter.instantiate!(id: key, state: %{count: 7})
 
     assert :ok =
              Jido.Persistence.save_agent(store, agent,
                revision: 1,
+               namespace: "ash-jido/consumer-test",
                instance: AshJidoConsumer
              )
 
     assert {:ok, restored} =
-             Jido.Persistence.load_agent(store, Counter, key, instance: AshJidoConsumer)
+             Jido.Persistence.load_agent(store, Counter, key,
+               namespace: "ash-jido/consumer-test",
+               instance: AshJidoConsumer
+             )
 
     assert restored.state == %{count: 7}
 
     assert :ok =
-             Jido.Persistence.delete_agent(store, Counter, key, instance: AshJidoConsumer)
+             Jido.Persistence.delete_agent(store, Counter, key,
+               namespace: "ash-jido/consumer-test",
+               instance: AshJidoConsumer
+             )
 
     assert {:error, :deleted} =
-             Jido.Persistence.load_agent(store, Counter, key, instance: AshJidoConsumer)
+             Jido.Persistence.load_agent(store, Counter, key,
+               namespace: "ash-jido/consumer-test",
+               instance: AshJidoConsumer
+             )
   end
 
   test "token compare-and-swap rejects stale concurrent writers", %{key: key, opts: opts} do

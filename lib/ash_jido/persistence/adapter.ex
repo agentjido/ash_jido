@@ -7,7 +7,7 @@ defmodule AshJido.Persistence.Adapter do
   actions. The resource data layer must support atomic query updates.
   """
 
-  @behaviour Jido.Persistence.Adapter
+  @behaviour Jido.Persistence.Store
 
   require Ash.Query
 

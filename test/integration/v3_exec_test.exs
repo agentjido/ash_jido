@@ -31,14 +31,14 @@ defmodule AshJido.V3ExecTest do
 
     assert id == user.id
 
-    assert {:error, %Jido.Action.Error.ExecutionFailureError{details: %{reason: :not_found}}} =
+    assert {:error, %Jido.Error.ExecutionError{details: %{reason: :not_found}}} =
              Jido.Exec.run(GetUser, %{id: user.id}, %{})
   end
 
   test "Ash actor policy remains the authorization boundary" do
     params = %{title: "Protected", owner_id: "owner-1"}
 
-    assert {:error, %Jido.Action.Error.ExecutionFailureError{details: %{reason: :forbidden}}} =
+    assert {:error, %Jido.Error.ExecutionError{details: %{reason: :forbidden}}} =
              Jido.Exec.run(AshJido.Test.ProtectedResource.Jido.Create, params, %{})
 
     assert {:ok, %{result: %{title: "Protected"}}} =
@@ -87,10 +87,10 @@ defmodule AshJido.V3ExecTest do
     assert Map.has_key?(selected, :age)
     refute Map.has_key?(selected, :secret)
 
-    assert {:error, %Jido.Action.Error.ExecutionFailureError{details: %{reason: :not_found}}} =
+    assert {:error, %Jido.Error.ExecutionError{details: %{reason: :not_found}}} =
              Jido.Exec.run(UpdateAge, %{id: Ash.UUID.generate(), age: 1}, %{})
 
-    assert {:error, %Jido.Action.Error.ExecutionFailureError{details: %{reason: :not_found}}} =
+    assert {:error, %Jido.Error.ExecutionError{details: %{reason: :not_found}}} =
              Jido.Exec.run(Destroy, %{id: Ash.UUID.generate()}, %{})
 
     assert AshJido.Runtime.fetch_primary_key!(%{"id" => created.id}, [:id], :update) == created.id

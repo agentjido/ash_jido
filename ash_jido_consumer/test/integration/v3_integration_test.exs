@@ -40,7 +40,7 @@ defmodule AshJidoConsumer.V3IntegrationTest do
   test "domain Actions use AshPostgres and keep Ash authorization" do
     params = %{name: "Ada", email: unique_email("ada")}
 
-    assert {:error, %Jido.Action.Error.ExecutionFailureError{details: %{reason: :forbidden}}} =
+    assert {:error, %Jido.Error.ExecutionError{details: %{reason: :forbidden}}} =
              Jido.Exec.run(Accounts.Jido.CreateUser, params, %{})
 
     context = %{ash: %{actor: %{id: "actor-1"}}}

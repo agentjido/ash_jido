@@ -3,7 +3,7 @@ defmodule AshJido.Error do
   Converts Ash failures into a small, redacted Jido Action error surface.
   """
 
-  alias Jido.Action.Error
+  alias Jido.Error
 
   @doc "Converts an Ash error without exposing Ash internal values."
   @spec from_ash(term()) :: Exception.t()

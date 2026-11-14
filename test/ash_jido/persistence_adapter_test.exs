@@ -4,9 +4,53 @@ defmodule AshJido.PersistenceAdapterTest do
   alias AshJido.Persistence.Adapter
   alias AshJido.Test.PersistenceStore
 
+  defmodule Counter do
+    use Jido.Agent, name: "ash_store_contract_counter"
+
+    state do
+      schema Jido.Joi.object(%{count: Jido.Joi.integer() |> Jido.Joi.default(0)})
+    end
+  end
+
   setup do
     key = "persistence-#{System.unique_integer([:positive, :monotonic])}"
     {:ok, key: key, opts: [resource: PersistenceStore]}
+  end
+
+  test "public Store wraps tokens and rejects an ABA stale writer", %{key: key, opts: opts} do
+    assert {:ok, store} = Jido.Persistence.Store.open({Adapter, opts})
+    assert :ok = Jido.Persistence.Store.compare_and_swap(store, key, :not_found, "one")
+    assert {:ok, "one", {:token, token} = condition} = Jido.Persistence.Store.read(store, key)
+    assert :ok = Jido.Persistence.Store.compare_and_swap(store, key, condition, "two")
+    assert :ok = Adapter.put(key, "one", opts)
+    assert {:ok, "one", {:token, new_token}} = Jido.Persistence.Store.read(store, key)
+    refute token == new_token
+    assert {:error, :conflict} = Jido.Persistence.Store.compare_and_swap(store, key, condition, "stale")
+  end
+
+  test "Jido checkpoints preserve revision conflicts and deletion", %{key: key, opts: opts} do
+    store = {Adapter, opts}
+    agent = Counter.instantiate!(id: key, state: %{count: 7})
+
+    assert :ok =
+             Jido.Persistence.save_agent(store, agent, revision: 1, instance: AshJido, namespace: "ash-jido/u1-test")
+
+    assert {:ok, restored, 1} =
+             Jido.Persistence.load_agent_with_revision(store, Counter, key,
+               instance: AshJido,
+               namespace: "ash-jido/u1-test"
+             )
+
+    assert restored.state == agent.state
+    changed = %{agent | state: %{count: 8}}
+
+    assert {:error, :conflict} =
+             Jido.Persistence.save_agent(store, changed, revision: 1, instance: AshJido, namespace: "ash-jido/u1-test")
+
+    assert :ok = Jido.Persistence.delete_agent(store, Counter, key, instance: AshJido, namespace: "ash-jido/u1-test")
+
+    assert {:error, :deleted} =
+             Jido.Persistence.load_agent(store, Counter, key, instance: AshJido, namespace: "ash-jido/u1-test")
   end
 
   test "the generated store contract is private and valid" do

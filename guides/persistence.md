@@ -1,6 +1,6 @@
 # Ash persistence adapter
 
-`AshJido.Persistence.Adapter` implements the Jido v3 byte-store contract with a user-owned Ash resource.
+`AshJido.Persistence.Adapter` implements `Jido.Persistence.Store`, the Jido v3 byte-store contract with a user-owned Ash resource.
 
 Jido owns checkpoint encoding, record keys, revisions, tombstones, activation, hibernation, and recovery. AshJido stores only opaque binary keys and values.
 

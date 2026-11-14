@@ -1,3 +1,5 @@
+> The consolidated-core API plan in `docs/plans/2026-11-14-consolidated-v3-upgrade.md` supersedes the older core contract names in this document.
+
 # AshJido Plan for Jido v3
 
 Status: Implemented beta baseline  

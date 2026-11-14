@@ -30,36 +30,36 @@ defmodule AshJido.ErrorTest do
   end
 
   test "maps known error categories to redacted Jido errors" do
-    assert %Jido.Action.Error.ExecutionFailureError{
+    assert %Jido.Error.ExecutionError{
              message: "Ash record was not found",
              details: %{reason: :not_found}
            } = AshJido.Error.from_ash(%NotFoundFailure{})
 
-    assert %Jido.Action.Error.ExecutionFailureError{
+    assert %Jido.Error.ExecutionError{
              message: "Ash action has a conflict",
              details: %{reason: :conflict}
            } = AshJido.Error.from_ash(%StaleFailure{})
 
-    assert %Jido.Action.Error.TimeoutError{
+    assert %Jido.Error.TimeoutError{
              message: "Ash action timed out",
              details: %{reason: :timeout}
            } = AshJido.Error.from_ash(%TimeoutFailure{})
 
-    assert %Jido.Action.Error.InternalError{
+    assert %Jido.Error.InternalError{
              message: "Ash action failed",
              details: %{reason: :internal}
            } = AshJido.Error.from_ash(%OtherFailure{})
 
-    assert %Jido.Action.Error.ExecutionFailureError{details: %{reason: :forbidden}} =
+    assert %Jido.Error.ExecutionError{details: %{reason: :forbidden}} =
              AshJido.Error.from_ash(%ForbiddenFailure{})
 
-    assert %Jido.Action.Error.ExecutionFailureError{details: %{reason: :conflict}} =
+    assert %Jido.Error.ExecutionError{details: %{reason: :conflict}} =
              AshJido.Error.from_ash(%ConflictFailure{})
 
-    assert %Jido.Action.Error.InvalidInputError{details: %{reason: :invalid_input}} =
+    assert %Jido.Error.ValidationError{details: %{reason: :invalid_input}} =
              AshJido.Error.from_ash(%InvalidFailure{field: :name, message: "is invalid"})
 
-    assert %Jido.Action.Error.InternalError{details: %{reason: :internal}} =
+    assert %Jido.Error.InternalError{details: %{reason: :internal}} =
              AshJido.Error.from_ash(:unknown)
   end
 
@@ -81,7 +81,7 @@ defmodule AshJido.ErrorTest do
   end
 
   test "uses fixed internal error data" do
-    assert %Jido.Action.Error.InternalError{details: %{reason: :internal}} =
+    assert %Jido.Error.InternalError{details: %{reason: :internal}} =
              AshJido.Error.internal(:throw, {:secret, "value"})
   end
 end
