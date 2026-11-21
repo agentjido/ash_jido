@@ -1,5 +1,7 @@
 ExUnit.start()
 
+if is_nil(System.get_env("ASH_JIDO_POSTGRES_PORT")), do: ExUnit.configure(exclude: [:postgres])
+
 # Ensure Ash is started for tests
 Application.ensure_all_started(:ash)
 

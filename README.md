@@ -18,6 +18,7 @@ AshJido compiles selected Ash APIs into native Jido v3 Actions. It keeps Ash as 
 - Public, non-sensitive result serialization
 - Explicit filter, sort, load, and pagination allowlists
 - Ash-backed Jido persistence with atomic compare-and-swap
+- [One durable Agent per Ash resource row](guides/agent-state.md)
 - Ash notifier publications to a Jido Signal bus
 
 AshJido does not add a second Action, Flow, Agent, or Signal runtime.
