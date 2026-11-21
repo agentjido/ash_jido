@@ -54,16 +54,35 @@ defmodule AshJido.RowBackedStateTest do
           attribute :priority, :integer, constraints: [min: 1, max: 5], allow_nil?: false
           attribute :budget, :decimal, allow_nil?: false
           attribute :notes, :string
+          attribute :row_generation, :uuid, allow_nil?: false, writable?: false, default: &Ash.UUID.generate/0
           attribute :version, :integer, allow_nil?: false, default: 1
         end
 
         actions do
-          defaults [:read, create: unquote(create_fields ++ [:status, :priority, :budget, :notes])]
+          defaults [:read, :destroy, create: unquote(create_fields ++ [:status, :priority, :budget, :notes])]
 
           update :commit_state do
             require_atomic? false
             accept [:status, :priority, :budget]
             change optimistic_lock(:version)
+
+            change fn changeset, _context ->
+              case :persistent_term.get({AshJido.RowBackedStateTest, :hook, changeset.data.case_id}, nil) do
+                nil ->
+                  changeset
+
+                :switch_repo ->
+                  Ash.Changeset.before_action(changeset, fn changeset ->
+                    Ash.Changeset.set_context(changeset, %{data_layer: %{repo: AshJido.UnconfiguredRepo}})
+                  end)
+
+                pid ->
+                  Ash.Changeset.after_transaction(changeset, fn _changeset, result ->
+                    send(pid, :transaction_hook_ran)
+                    result
+                  end)
+              end
+            end
 
             change fn changeset, _context ->
               case Ash.Changeset.get_attribute(changeset, :priority) do
@@ -111,6 +130,12 @@ defmodule AshJido.RowBackedStateTest do
     use ResourceFields
   end
 
+  defmodule Tenant do
+    def parse("org:" <> id), do: id
+    def parse(id), do: id
+    def from_attribute(id), do: "org:" <> id
+  end
+
   defmodule SQLiteScopedCase do
     use Ash.Resource, domain: AshJido.RowBackedStateTest.Domain, data_layer: AshSqlite.DataLayer
 
@@ -122,6 +147,8 @@ defmodule AshJido.RowBackedStateTest do
     multitenancy do
       strategy :attribute
       attribute :tenant_id
+      parse_attribute {AshJido.RowBackedStateTest.Tenant, :parse, []}
+      tenant_from_attribute {AshJido.RowBackedStateTest.Tenant, :from_attribute, []}
     end
 
     use ResourceFields, :scoped
@@ -138,6 +165,8 @@ defmodule AshJido.RowBackedStateTest do
     multitenancy do
       strategy :attribute
       attribute :tenant_id
+      parse_attribute {AshJido.RowBackedStateTest.Tenant, :parse, []}
+      tenant_from_attribute {AshJido.RowBackedStateTest.Tenant, :from_attribute, []}
     end
 
     use ResourceFields, :scoped
@@ -281,6 +310,9 @@ defmodule AshJido.RowBackedStateTest do
       setup_binding(SQLite, SQLiteCase, SQLiteCheckpoint, SQLiteAgent)
     end
 
+    test("rejects a Turn for a deleted and reinserted row", fixture, do: recycled_row(fixture))
+    test("rejects an Ash transaction hook before it can run", fixture, do: rejects_transaction_hook(fixture))
+    test("rejects a repo switch from an Ash action hook", fixture, do: rejects_repo_switch(fixture))
     test("commits the canonical row and receipt with a normal Signal", fixture, do: commits_and_restores(fixture))
     test("reports an external write conflict and refreshes for the next turn", fixture, do: external_update(fixture))
     test("rolls back a row update when the checkpoint conflicts", fixture, do: checkpoint_conflict(fixture))
@@ -319,6 +351,9 @@ defmodule AshJido.RowBackedStateTest do
       setup_binding(Postgres, PostgresCase, PostgresCheckpoint, PostgresAgent)
     end
 
+    test("rejects a Turn for a deleted and reinserted row", fixture, do: recycled_row(fixture))
+    test("rejects an Ash transaction hook before it can run", fixture, do: rejects_transaction_hook(fixture))
+    test("rejects a repo switch from an Ash action hook", fixture, do: rejects_repo_switch(fixture))
     test("commits the canonical row and receipt with a normal Signal", fixture, do: commits_and_restores(fixture))
     test("reports an external write conflict and refreshes for the next turn", fixture, do: external_update(fixture))
     test("rolls back a row update when the checkpoint conflicts", fixture, do: checkpoint_conflict(fixture))
@@ -380,6 +415,7 @@ defmodule AshJido.RowBackedStateTest do
       priority BIGINT NOT NULL,
       budget #{decimal_type} NOT NULL,
       notes TEXT,
+      row_generation #{id_type} NOT NULL,
       version BIGINT NOT NULL DEFAULT 1,
       PRIMARY KEY (tenant_id, case_id)
     )
@@ -392,6 +428,7 @@ defmodule AshJido.RowBackedStateTest do
       priority BIGINT NOT NULL,
       budget #{decimal_type} NOT NULL,
       notes TEXT,
+      row_generation #{id_type} NOT NULL,
       version BIGINT NOT NULL DEFAULT 1
     )
     """)
@@ -478,7 +515,9 @@ defmodule AshJido.RowBackedStateTest do
 
   defp scoped_start(resource, agent) do
     for {tenant, priority} <- [{"west", 2}, {"east", 3}] do
-      Ash.create!(resource, %{case_id: 42, status: :open, priority: priority, budget: "12.30"}, tenant: tenant)
+      Ash.create!(resource, %{case_id: 42, status: :open, priority: priority, budget: "12.30"},
+        tenant: "org:" <> tenant
+      )
     end
 
     west = %{tenant_id: "west", case_id: 42}
@@ -502,10 +541,11 @@ defmodule AshJido.RowBackedStateTest do
              Jido.start_agent(Runtime, agent, state: AshJido.row(west, tenant: "east"))
 
     assert {:ok, west_server} =
-             Jido.start_agent(Runtime, agent, state: AshJido.row(%{west | case_id: "42"}, tenant: "west"))
+             Jido.start_agent(Runtime, agent, state: AshJido.row(%{west | case_id: "42"}, tenant: "org:west"))
 
     assert {:ok, east_server} = AshJido.start_agent(Runtime, agent, east, tenant: "east")
     assert {:ok, west_address} = State.address(Runtime, agent, west, tenant: "west")
+    assert {:ok, ^west_address} = State.address(Runtime, agent, west, tenant: "org:west")
     assert {:ok, east_address} = State.address(Runtime, agent, east, tenant: "east")
     assert west_address.id != east_address.id
     assert %{agent: %{id: west_id, state: %{priority: 2}}} = AgentServer.snapshot(west_server)
@@ -582,6 +622,46 @@ defmodule AshJido.RowBackedStateTest do
                  Jido.call(Runtime, address, approval)
 
         assert %{priority: 3, status: :closed, version: 3} = Ash.get!(resource, id)
+    end
+  end
+
+  defp recycled_row(%{resource: resource, id: id} = fixture) do
+    {task, action} = pause_turn(fixture)
+    resource |> Ash.get!(id) |> Ash.destroy!()
+
+    resource
+    |> Ash.Changeset.for_create(:create, %{status: :open, priority: 5, budget: "12.30"})
+    |> Ash.Changeset.force_change_attribute(:case_id, id)
+    |> Ash.create!()
+
+    send(action, :continue)
+    assert {:ok, %{status: :failed, error: :ash_state_row_replaced}} = Task.await(task)
+    assert {:ok, %{status: :failed, error: :ash_state_row_replaced}} = call(fixture, 4)
+    assert %{priority: 5, version: 1} = Ash.get!(resource, id)
+    assert :ok = Jido.stop_agent(Runtime, fixture.server)
+    assert {:error, :ash_state_row_replaced} = Jido.activate_agent(Runtime, fixture.address)
+  end
+
+  defp rejects_repo_switch(%{resource: resource, id: id} = fixture) do
+    :persistent_term.put({__MODULE__, :hook, id}, :switch_repo)
+
+    try do
+      assert {:ok, %{status: :failed, error: :ash_state_unsupported_action_hooks}} = call(fixture, 4)
+      assert %{priority: 2, version: 1} = Ash.get!(resource, id)
+    after
+      :persistent_term.erase({__MODULE__, :hook, id})
+    end
+  end
+
+  defp rejects_transaction_hook(%{resource: resource, id: id} = fixture) do
+    :persistent_term.put({__MODULE__, :hook, id}, self())
+
+    try do
+      assert {:ok, %{status: :failed, error: :ash_state_unsupported_action_hooks}} = call(fixture, 4)
+      refute_received :transaction_hook_ran
+      assert %{priority: 2, version: 1} = Ash.get!(resource, id)
+    after
+      :persistent_term.erase({__MODULE__, :hook, id})
     end
   end
 

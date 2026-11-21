@@ -38,7 +38,7 @@ defmodule AshJido.State do
   @spec address(module(), module(), term(), keyword()) :: {:ok, Jido.Agent.Address.t()} | {:error, term()}
   def address(instance, module, key, opts \\ []) do
     with {:ok, descriptor} <- descriptor(module),
-         {:ok, id} <- Identity.encode(descriptor, key, Keyword.get(opts, :tenant)),
+         {:ok, id} <- startup_id(descriptor, {key, Keyword.take(opts, [:tenant])}),
          do: Jido.agent_address(instance, id, Keyword.take(opts, [:partition]))
   end
 
@@ -93,10 +93,8 @@ defmodule AshJido.State do
 
   defp startup_tenant(resource, opts) do
     if Keyword.keyword?(opts) and Keyword.keys(opts) in [[], [:tenant]] do
-      tenant = opts[:tenant]
-
-      case validate_tenant(resource, tenant) do
-        :ok -> {:ok, tenant}
+      case canonical_tenant(resource, opts[:tenant]) do
+        {:ok, tenant} -> {:ok, tenant}
         {:error, reason} -> startup_error(reason, tenant_message(Info.multitenancy_strategy(resource)))
       end
     else
@@ -157,6 +155,7 @@ defmodule AshJido.State do
     with :ok <- claim(context, agent.module, :restore),
          {:ok, saved, revision, agent_revision, turn, handoffs} <- open.(agent),
          {:ok, row, _opts} <- read_for_agent(descriptor, context.address, nil, repo),
+         :ok <- same_generation(saved, row, descriptor),
          {:ok, refreshed} <- merge_projection(saved, row, descriptor) do
       current = if in_flight?(turn), do: saved, else: refreshed
       {:ok, current, revision, agent_revision, turn, handoffs}
@@ -182,7 +181,9 @@ defmodule AshJido.State do
   @impl true
   @doc false
   def refresh(descriptor, context, agent) do
-    with {:ok, row, _opts} <- read_for_agent(descriptor, context.address, nil),
+    with {:ok, {repo, _opts, _lock}} <- Transaction.shared_repo(context.persistence, descriptor),
+         {:ok, row, _opts} <- read_for_agent(descriptor, context.address, nil, repo),
+         :ok <- same_generation(agent, row, descriptor),
          do: merge_projection(agent, row, descriptor)
   end
 
@@ -202,9 +203,11 @@ defmodule AshJido.State do
 
   defp commit_row(descriptor, context, {repo, _transaction_opts, lock}, before, candidate, changes, arguments, save) do
     with {:ok, row, opts} <- known(read_for_agent(descriptor, context.address, lock, repo)),
+         :ok <- known(same_generation(before, row, descriptor)),
          version = Map.fetch!(before.state, descriptor.version),
          :ok <- version_is(row, descriptor.version, version),
          {:ok, saved, notifications} <- write_row(row, changes, arguments, descriptor, opts, version, repo),
+         :ok <- known(same_generation(before, saved, descriptor)),
          {:ok, canonical} <- known(merge_projection(candidate, saved, descriptor)),
          {:ok, payload} <- save.(canonical) do
       {:ok, payload, notifications}
@@ -218,8 +221,10 @@ defmodule AshJido.State do
     changeset = Ash.Changeset.for_update(row, descriptor.update, Map.merge(changes, arguments), opts)
 
     with :ok <- known(check_repo(changeset, repo)),
-         {:ok, _updated, notifications} <-
-           Ash.update(changeset, Keyword.put(opts, :return_notifications?, true)) |> ash_result(),
+         :ok <- known(check_hooks(changeset)),
+         changeset = Ash.Changeset.before_action(changeset, &guard_changeset(&1, repo)),
+         update_opts = opts ++ [return_notifications?: true, atomic_upgrade?: false],
+         {:ok, _updated, notifications} <- Ash.update(changeset, update_opts) |> ash_result(),
          {:ok, keys} <- known(project_key(row, descriptor)),
          {:ok, saved} <- known(read_row(descriptor, keys, opts, nil, repo)),
          :ok <- known(check_row_tenant(saved, descriptor.resource, opts[:tenant])),
@@ -255,7 +260,7 @@ defmodule AshJido.State do
 
   defp version_is(_row, _name, _version), do: {:error, {:rejected, :ash_state_version_unavailable}}
 
-  defp read_for_agent(descriptor, address, lock, repo \\ nil) do
+  defp read_for_agent(descriptor, address, lock, repo) do
     with {:ok, keys, tenant} <- Identity.decode(descriptor, address.id),
          {:ok, opts} <- ash_options(descriptor, address, keys, tenant),
          {:ok, row} <- read_row(descriptor, keys, opts, lock, repo),
@@ -274,7 +279,10 @@ defmodule AshJido.State do
 
     query = if lock, do: Ash.Query.lock(query, lock), else: query
 
-    with :ok <- check_repo(query, repo) do
+    with :ok <- check_repo(query, repo),
+         :ok <- check_hooks(query) do
+      query = Ash.Query.before_action(query, &guard_query(&1, repo))
+
       case Ash.read_one(query, opts) do
         {:ok, %_{} = row} -> {:ok, row}
         {:ok, nil} -> {:error, :ash_state_row_not_found}
@@ -288,6 +296,60 @@ defmodule AshJido.State do
        do: {:error, :ash_state_requires_shared_transaction}
 
   defp check_repo(_operation, _repo), do: :ok
+
+  defp check_hooks(operation) do
+    unsupported = [
+      :after_action,
+      :around_action,
+      :atomic_after_action,
+      :atomic_after_action_prepend,
+      :before_transaction,
+      :around_transaction,
+      :after_transaction,
+      :atomic_after_transaction,
+      :atomic_after_transaction_prepend
+    ]
+
+    if Enum.any?(unsupported, &(Map.get(operation, &1, []) != [])) or
+         Enum.any?(operation.before_action, &(not version_increment_hook?(&1))),
+       do: {:error, :ash_state_unsupported_action_hooks},
+       else: :ok
+  end
+
+  # Ash's optimistic_lock change registers its built-in increment as a before-action hook.
+  defp version_increment_hook?(hook) when is_function(hook, 1),
+    do: Function.info(hook, :module) == {:module, Ash.Resource.Change.Increment}
+
+  defp version_increment_hook?(_hook), do: false
+
+  defp guard_changeset(changeset, repo) do
+    case check_repo(changeset, repo) do
+      :ok -> changeset
+      {:error, reason} -> {:error, boundary_error(reason)}
+    end
+  end
+
+  defp guard_query(query, repo) do
+    case check_repo(query, repo) do
+      :ok -> query
+      {:error, reason} -> Ash.Query.add_error(query, boundary_error(reason))
+    end
+  end
+
+  defp boundary_error(reason) do
+    Ash.Error.Changes.InvalidChanges.exception(
+      validation: __MODULE__,
+      value: reason,
+      message: "AshJido requires the configured repo and a guarded state action."
+    )
+  end
+
+  defp same_generation(%{state: state}, row, %{generation: field}) do
+    case {Map.fetch(state, field), Map.fetch(row, field)} do
+      {{:ok, generation}, {:ok, generation}} when is_binary(generation) -> :ok
+      _ -> {:error, :ash_state_row_replaced}
+    end
+  end
 
   defp merge_projection(agent, row, descriptor) do
     with {:ok, values} <- Projection.from_record(row, descriptor),
@@ -309,16 +371,52 @@ defmodule AshJido.State do
   defp apply_projection(agent, values), do: Jido.Agent.set(agent, values)
 
   defp ash_options(descriptor, address, keys, tenant) do
-    with :ok <- validate_tenant(descriptor.resource, tenant),
+    with {:ok, canonical} <- canonical_tenant(descriptor.resource, tenant),
+         true <- canonical == tenant,
          {:ok, actor} <- actor(descriptor.actor, %{address: address, key: keys, tenant: tenant}) do
       {:ok, [actor: actor, tenant: tenant, authorize?: true]}
+    else
+      false -> {:error, :invalid_ash_state_tenant}
+      {:error, _reason} = error -> error
     end
   end
 
-  defp validate_tenant(resource, tenant) do
+  defp canonical_tenant(resource, tenant) do
     case {Info.multitenancy_strategy(resource), tenant} do
-      {nil, nil} -> :ok
-      {:attribute, tenant} when is_binary(tenant) and byte_size(tenant) > 0 -> :ok
+      {nil, nil} ->
+        {:ok, nil}
+
+      {:attribute, tenant} when is_binary(tenant) and byte_size(tenant) > 0 ->
+        {module, function, args} = Info.multitenancy_tenant_from_attribute(resource)
+
+        with {:ok, value} <- tenant_attribute(resource, tenant),
+             canonical when is_binary(canonical) or is_integer(canonical) <- apply(module, function, [value | args]),
+             token = to_string(canonical),
+             true <- token != "",
+             {:ok, ^value} <- tenant_attribute(resource, token) do
+          {:ok, token}
+        else
+          _ -> {:error, :invalid_ash_state_tenant}
+        end
+
+      _ ->
+        {:error, :invalid_ash_state_tenant}
+    end
+  rescue
+    FunctionClauseError -> {:error, :invalid_ash_state_tenant}
+    ArgumentError -> {:error, :invalid_ash_state_tenant}
+  end
+
+  defp tenant_attribute(resource, tenant) do
+    {module, function, args} = Info.multitenancy_parse_attribute(resource)
+    name = Info.multitenancy_attribute(resource)
+    %{type: type, constraints: constraints} = Info.attribute(resource, name)
+
+    with input when not is_nil(input) <- apply(module, function, [tenant | args]),
+         {:ok, cast} <- Ash.Type.cast_input(type, input, constraints),
+         {:ok, value} when not is_nil(value) <- Ash.Type.apply_constraints(type, cast, constraints) do
+      {:ok, value}
+    else
       _ -> {:error, :invalid_ash_state_tenant}
     end
   end
@@ -328,9 +426,10 @@ defmodule AshJido.State do
   defp check_row_tenant(row, resource, tenant) do
     actual = Map.fetch!(row, Info.multitenancy_attribute(resource))
 
-    if (is_binary(actual) or is_integer(actual)) and to_string(actual) == tenant,
-      do: :ok,
-      else: {:error, :invalid_ash_state_tenant}
+    case tenant_attribute(resource, tenant) do
+      {:ok, ^actual} -> :ok
+      _ -> {:error, :invalid_ash_state_tenant}
+    end
   end
 
   defp actor(nil, _context), do: {:ok, nil}
@@ -351,9 +450,11 @@ defmodule AshJido.State do
   defp ash_error(%Ash.Error.Forbidden{}), do: :ash_state_forbidden
 
   defp ash_error(%Ash.Error.Invalid{errors: errors}) do
-    if Enum.any?(errors, &match?(%Ash.Error.Changes.StaleRecord{}, &1)),
-      do: :ash_state_stale_row,
-      else: :ash_state_invalid_action
+    Enum.find_value(errors, :ash_state_invalid_action, fn
+      %Ash.Error.Changes.StaleRecord{} -> :ash_state_stale_row
+      %Ash.Error.Changes.InvalidChanges{validation: __MODULE__, value: reason} -> reason
+      _ -> nil
+    end)
   end
 
   defp ash_error(_error), do: :ash_state_action_failed

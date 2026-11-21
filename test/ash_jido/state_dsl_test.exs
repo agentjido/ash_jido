@@ -8,6 +8,8 @@ defmodule AshJido.StateDSLTest do
       attribute :part, :string, primary_key?: true, allow_nil?: false
       attribute :number, :integer, primary_key?: true, allow_nil?: false
       attribute :status, :string, allow_nil?: false
+      attribute :priority, :integer, allow_nil?: false, constraints: [min: 1, max: 9]
+      attribute :row_generation, :uuid, allow_nil?: false, writable?: false, default: &Ash.UUID.generate/0
       attribute :version, :integer, allow_nil?: false, default: 1
     end
 
@@ -15,13 +17,27 @@ defmodule AshJido.StateDSLTest do
       defaults [:read]
 
       update :commit_state do
-        accept [:status]
+        accept [:status, :priority]
+        require_atomic? false
         change optimistic_lock(:version)
       end
 
+      read :needs_argument do
+        argument :required, :string, allow_nil?: false
+      end
+
       update :unsafe do
+        require_atomic? false
         accept [:status]
       end
+    end
+  end
+
+  defmodule CaseInsensitiveKey do
+    use Ash.Resource, domain: nil, data_layer: Ash.DataLayer.Ets
+
+    attributes do
+      attribute :name, :ci_string, primary_key?: true, allow_nil?: false
     end
   end
 
@@ -51,6 +67,8 @@ defmodule AshJido.StateDSLTest do
   test "rejects invalid projection and action declarations" do
     for {expression, failure} <- [
           {@ash <> ", id: :primary_key", ~r/unique supported keyword options/},
+          {@ash <> ", read: :needs_argument", ~r/read action cannot require arguments without defaults/},
+          {@ash <> ", generation: :version", ~r/required, non-writable UUID generated on create/},
           {String.replace(@ash, "[:status]", "[:status, :status]"), ~r/unique field names/},
           {String.replace(@ash, "[:status]", "[:missing]"), ~r/field :missing is not an attribute accepted/},
           {String.replace(@ash, ":commit_state", ":unsafe"), ~r/unconditional optimistic_lock/},
@@ -74,6 +92,30 @@ defmodule AshJido.StateDSLTest do
 
     assert {:error, :invalid_ash_state_identity} =
              AshJido.State.Identity.encode(descriptor, %{part: "a"}, nil)
+  end
+
+  test "rejects primary key types with no supported canonical encoding" do
+    ash = String.replace(@ash, inspect(Resource), inspect(CaseInsensitiveKey))
+
+    assert_raise CompileError, ~r/ash primary keys must use built-in/, fn ->
+      compile("state do
+#{ash}
+end")
+    end
+  end
+
+  test "exports the types and constraints of built-in scalar fields" do
+    ash = String.replace(@ash, "[:status]", "[:status, :priority]")
+    [{module, _}] = compile("state do
+#{ash}
+end")
+
+    assert %{
+             properties: %{
+               priority: %{type: :integer, minimum: 1, maximum: 9},
+               version: %{type: :integer}
+             }
+           } = Jido.Joi.to_json_schema(module.schema())
   end
 
   defp compile(body) do

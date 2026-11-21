@@ -6,14 +6,18 @@ through an Ash action and saves the Jido checkpoint in the same transaction.
 
 ## Configure the resource
 
-This example adds a version attribute to a case. Each action that can change
-projected fields must advance that version.
+This example adds a version and a row generation to a case. Each action
+that can change projected fields must advance the version. Each insert must
+generate a fresh generation UUID. The provider uses it to distinguish a
+replacement row with the same primary key and version. If the table already
+has rows, backfill a distinct generation for each row before using the Agent.
 
 ```elixir
 attributes do
   uuid_primary_key :id
   attribute :status, :atom, constraints: [one_of: [:open, :closed]], allow_nil?: false
   attribute :priority, :integer, constraints: [min: 1, max: 5], allow_nil?: false
+  attribute :row_generation, :uuid, allow_nil?: false, writable?: false, default: &Ash.UUID.generate/0
   attribute :version, :integer, default: 1, allow_nil?: false
 end
 
@@ -84,7 +88,9 @@ Jido.start_agent(MyApp.Jido, MyApp.Support.CaseAgent,
 
 AshJido derives the Agent ID. Omit `:id` in both forms. If the Agent
 requires a row and you omit it, the error points to `AshJido.row/2`.
-An invalid key error lists the primary key fields.
+An invalid key error lists the primary key fields. If the readiness wait
+elapses, the error includes the pending Agent address. Check the activation at
+that address before retrying.
 
 The route's default state mapping takes the complete next state from the
 Action output. For example, return `{:ok, %{context.agent_state | priority: priority}}`.
@@ -96,9 +102,11 @@ their original values. Use the snapshot or the Ash read action to read the
 saved values.
 
 Use a scalar primary key for a single key or a map for a composite key.
-Pass the same `:tenant` for an attribute-multitenant resource on each call
-that constructs the address. Use the tenant attribute's string value as the
-tenant identifier. Pass it to `AshJido.row/2` or to `AshJido.start_agent/4`.
+Supported keys use built-in UUID, string, binary, integer, atom, or boolean
+types. The read action must supply defaults for its required arguments.
+Pass the Ash tenant token as a string to `AshJido.row/2` or
+`AshJido.start_agent/4`. AshJido uses the resource's `parse_attribute` and
+`tenant_from_attribute` callbacks to resolve tenant aliases to one address.
 Agent IDs encode the primary key and tenant, so use
 identifiers that can appear in logs and telemetry. Use `AshJido.State.address/4` with
 `Jido.activate_agent/3` to restore an existing binding. A second address
@@ -111,7 +119,8 @@ the binding.
 | Option | Behavior |
 | --- | --- |
 | `fields:` | Writable attributes accepted by the named update action. Only changed fields go to Ash. |
-| `read_only:` | Project keys, generated values, calculations, aggregates, or related values. The version is always read-only. |
+| `read_only:` | Project keys, generated values, calculations, aggregates, or related values. The version and generation are always read-only. |
+| `generation:` | Name the row generation UUID attribute. The default name is `:row_generation`. |
 | `load:` | Pass an explicit Ash load for calculated, aggregate, or relationship values. |
 | `codecs:` | Map a field to a trusted module with `encode/1` and `decode/1`. Return `{:ok, value}` or `{:error, reason}`. Use a codec to expose selected fields of an embedded or related record. |
 | `arguments:` | Map a named update action argument to a writable state field. The argument gets that field's value when a state change calls the action. |
@@ -127,7 +136,8 @@ the private checkpoint.
 ## Operate the binding
 
 A stale row fails the Turn with `:ash_state_stale_row`. The next fresh Turn
-reads the current row. An in-flight durable continuation keeps its original row
+reads the current row. If the row was replaced, `:ash_state_row_replaced`
+blocks the old Agent from attaching to the new row. An in-flight durable continuation keeps its original row
 version and cannot commit over an external change. A checkpoint conflict
 rolls back the Ash update and uses Jido's reconciliation path. If a caller
 needs the exact result after a lost reply, submit a stable Turn ID with
@@ -148,12 +158,20 @@ second lifetime.
 
 Use one database repo for the update, checkpoint, and all related writes in
 the commit action. List resources that custom changes write in the Ash
-action's `touches_resources` option. Keep repo selection fixed. Custom
-queries and changes must use the configured repo, and their hooks must leave
-external effects for after the Agent Turn commits. If a projected calculation or relationship
-depends on another row, make its writers advance the bound row's version to
-detect concurrent changes. SQLite and PostgreSQL are supported. Context-per-tenant
+action's `touches_resources` option. Use dedicated read and update actions
+with no custom action or transaction hooks. AshJido rejects registered hooks
+before running the action. Keep custom changes and nested operations on the
+same repo. Use an outbox for effects that must follow the commit. If a
+projected calculation or relationship depends on another row, make its writers
+advance the bound row's version to detect concurrent changes. SQLite and PostgreSQL are supported. Context-per-tenant
 databases and separate read or write repos cannot take part in this feature.
+
+## Use JSON definitions
+
+The Elixir `ash` declaration supplies the schema. JSON can reference the
+compiled Agent and its inferred schema through the Catalog. A different
+registered schema fails validation. JSON Schema describes supported scalar
+fields. Ash still validates the full projection at runtime.
 
 ## Run the integration tests
 

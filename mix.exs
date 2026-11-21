@@ -76,7 +76,7 @@ defmodule AshJido.MixProject do
       # Runtime dependencies
       {:ash, "~> 3.31 and >= 3.34.4"},
       # Use the tested release/v3 contract until the next coordinated Hex release.
-      {:jido, github: "agentjido/jido", ref: "e07b85b6190f6a910b7a2771000855524d757a42", override: true},
+      {:jido, github: "agentjido/jido", ref: "0300c1b7c5d2cd2013ad5034a22d65b24690afa1", override: true},
       {:zoi, "~> 0.19.0"},
 
       # Dev/Test dependencies

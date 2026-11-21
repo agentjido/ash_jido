@@ -14,7 +14,7 @@ defmodule AshJido.State.Definition do
       error!(env, "#{inspect(resource)} must be a compiled Ash resource")
     end
 
-    allowed = [:fields, :read_only, :id, :read, :update, :version, :actor, :load, :codecs, :arguments]
+    allowed = [:fields, :read_only, :id, :read, :update, :version, :generation, :actor, :load, :codecs, :arguments]
 
     unless Keyword.keyword?(opts) and Enum.uniq(Keyword.keys(opts)) == Keyword.keys(opts) and
              Keyword.keys(opts) -- allowed == [] do
@@ -26,7 +26,20 @@ defmodule AshJido.State.Definition do
     if key == [] or Keyword.get(opts, :id, :primary_key) != :primary_key,
       do: error!(env, "ash requires id: :primary_key and an Ash primary key")
 
+    if Enum.any?(key, &unsupported_key?(resource, &1)) do
+      error!(env, "ash primary keys must use built-in UUID, string, binary, integer, atom, or boolean types")
+    end
+
     version = Keyword.get(opts, :version, :version)
+    generation = Keyword.get(opts, :generation, :row_generation)
+
+    unless valid_generation?(Info.attribute(resource, generation)) and generation not in key and
+             generation != Info.multitenancy_attribute(resource) do
+      error!(
+        env,
+        "ash generation #{inspect(generation)} must be a separate required, non-writable UUID generated on create"
+      )
+    end
 
     unless match?(%{type: Ash.Type.Integer, allow_nil?: false}, Info.attribute(resource, version)) do
       error!(env, "ash version #{inspect(version)} must be a required integer attribute")
@@ -38,24 +51,30 @@ defmodule AshJido.State.Definition do
     if read.manual != nil or read.modify_query != nil,
       do: error!(env, "ash state read must support the resource row filter and lock")
 
+    if Enum.any?(read.arguments, &required_argument?/1),
+      do: error!(env, "ash state read action cannot require arguments without defaults")
+
+    if update.require_atomic?,
+      do: error!(env, "ash update requires require_atomic? false so the provider can guard the transaction")
+
     unless is_nil(update.manual) and Enum.any?(update.changes, &locks_version?(&1, version)) do
       error!(env, "ash update requires an unconditional optimistic_lock(#{inspect(version)}) change")
     end
 
     writable = fields!(opts[:fields], :fields, env)
     read_only = fields!(Keyword.get(opts, :read_only, []), :read_only, env)
-    reserved = [version, Info.multitenancy_attribute(resource) | key]
+    reserved = [version, generation, Info.multitenancy_attribute(resource) | key]
 
     if Enum.any?(writable, &(&1 in reserved or &1 in read_only)) do
-      error!(env, "ash writable fields overlap with the primary key, version, tenant, or read_only fields")
+      error!(env, "ash writable fields overlap with the primary key, version, generation, tenant, or read_only fields")
     end
 
     if bad = Enum.find(writable, &(is_nil(Info.attribute(resource, &1)) or &1 not in update.accept)) do
       error!(env, "ash field #{inspect(bad)} is not an attribute accepted by #{inspect(update.name)}")
     end
 
-    fields = Enum.uniq(writable ++ read_only ++ [version])
-    codecs = indexed_options!(opts[:codecs], fields -- [version], :codecs, env)
+    fields = Enum.uniq(writable ++ read_only ++ [version, generation])
+    codecs = indexed_options!(opts[:codecs], fields -- [version, generation], :codecs, env)
     actor = opts[:actor]
     if actor != nil and not mfa?(actor), do: error!(env, "ash actor must be a module/function/arguments tuple")
 
@@ -67,7 +86,7 @@ defmodule AshJido.State.Definition do
     unless Enum.all?(arguments, fn {_name, field} -> field in writable end),
       do: error!(env, "ash arguments must map to writable state fields")
 
-    arguments_required = Enum.reject(update.arguments, &(&1.allow_nil? or &1.default != nil))
+    arguments_required = Enum.filter(update.arguments, &required_argument?/1)
 
     if Enum.any?(arguments_required, &(not Map.has_key?(arguments, &1.name))),
       do: error!(env, "ash update arguments without defaults must be mapped in arguments:")
@@ -83,6 +102,7 @@ defmodule AshJido.State.Definition do
       touched_resources: touched_resources(resource, update),
       key: key,
       version: version,
+      generation: generation,
       read: read.name,
       update: update.name,
       fields: fields,
@@ -94,6 +114,25 @@ defmodule AshJido.State.Definition do
     }
 
     {Joi.object(schema), descriptor}
+  end
+
+  defp required_argument?(argument), do: not argument.allow_nil? and is_nil(argument.default)
+
+  defp valid_generation?(%{type: Ash.Type.UUID, allow_nil?: false, writable?: false, default: default}),
+    do: default == (&Ash.UUID.generate/0)
+
+  defp valid_generation?(_attribute), do: false
+
+  defp unsupported_key?(resource, name) do
+    Info.attribute(resource, name).type not in [
+      Ash.Type.UUID,
+      Ash.Type.UUIDv7,
+      Ash.Type.String,
+      Ash.Type.Binary,
+      Ash.Type.Integer,
+      Ash.Type.Atom,
+      Ash.Type.Boolean
+    ]
   end
 
   defp locks_version?(%{change: {OptimisticLock, opts}, where: []}, version), do: opts[:attribute] == version
@@ -166,9 +205,39 @@ defmodule AshJido.State.Definition do
         error!(env, "ash field #{inspect(field)} is unknown or requires a relationship codec")
     end
 
-    Joi.any()
+    attribute
+    |> scalar_schema(codec)
     |> Joi.refine({Projection, :check, [resource, field, codec]})
     |> Joi.required()
+  end
+
+  defp scalar_schema(attribute, nil) do
+    schema =
+      case attribute do
+        %{type: Ash.Type.Integer, constraints: limits} ->
+          Joi.integer() |> bounds(limits[:min], limits[:max])
+
+        %{type: Ash.Type.String, constraints: limits} ->
+          Joi.string() |> bounds(limits[:min_length], limits[:max_length])
+
+        %{type: Ash.Type.UUID} ->
+          Joi.string()
+
+        %{type: Ash.Type.Boolean} ->
+          Joi.boolean()
+
+        _ ->
+          Joi.any()
+      end
+
+    if match?(%{allow_nil?: true}, attribute), do: Joi.nullable(schema), else: schema
+  end
+
+  defp scalar_schema(_attribute, _codec), do: Joi.any()
+
+  defp bounds(schema, min, max) do
+    schema = if is_nil(min), do: schema, else: Joi.min(schema, min)
+    if is_nil(max), do: schema, else: Joi.max(schema, max)
   end
 
   defp mfa?({module, function, args}),
