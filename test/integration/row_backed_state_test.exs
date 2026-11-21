@@ -33,10 +33,23 @@ defmodule AshJido.RowBackedStateTest do
   end
 
   defmodule ResourceFields do
-    defmacro __using__(_) do
+    defmacro __using__(kind) do
+      {keys, create_fields} =
+        if kind == :scoped do
+          keys =
+            quote do
+              attribute :tenant_id, :string, primary_key?: true, allow_nil?: false
+              attribute :case_id, :integer, primary_key?: true, allow_nil?: false
+            end
+
+          {keys, [:case_id]}
+        else
+          {quote(do: uuid_primary_key(:case_id)), []}
+        end
+
       quote do
         attributes do
-          uuid_primary_key :case_id
+          unquote(keys)
           attribute :status, :atom, constraints: [one_of: [:open, :closed]], allow_nil?: false
           attribute :priority, :integer, constraints: [min: 1, max: 5], allow_nil?: false
           attribute :budget, :decimal, allow_nil?: false
@@ -45,7 +58,7 @@ defmodule AshJido.RowBackedStateTest do
         end
 
         actions do
-          defaults [:read, create: [:status, :priority, :budget, :notes]]
+          defaults [:read, create: unquote(create_fields ++ [:status, :priority, :budget, :notes])]
 
           update :commit_state do
             require_atomic? false
@@ -98,6 +111,38 @@ defmodule AshJido.RowBackedStateTest do
     use ResourceFields
   end
 
+  defmodule SQLiteScopedCase do
+    use Ash.Resource, domain: AshJido.RowBackedStateTest.Domain, data_layer: AshSqlite.DataLayer
+
+    sqlite do
+      table "scoped_cases"
+      repo(SQLite)
+    end
+
+    multitenancy do
+      strategy :attribute
+      attribute :tenant_id
+    end
+
+    use ResourceFields, :scoped
+  end
+
+  defmodule PostgresScopedCase do
+    use Ash.Resource, domain: AshJido.RowBackedStateTest.Domain, data_layer: AshPostgres.DataLayer
+
+    postgres do
+      table "scoped_cases"
+      repo(Postgres)
+    end
+
+    multitenancy do
+      strategy :attribute
+      attribute :tenant_id
+    end
+
+    use ResourceFields, :scoped
+  end
+
   defmodule SQLiteCheckpoint do
     use Ash.Resource,
       domain: AshJido.RowBackedStateTest.Domain,
@@ -136,6 +181,8 @@ defmodule AshJido.RowBackedStateTest do
     resources do
       resource SQLiteCase
       resource PostgresCase
+      resource SQLiteScopedCase
+      resource PostgresScopedCase
       resource SQLiteCheckpoint
       resource PostgresCheckpoint
     end
@@ -216,6 +263,14 @@ defmodule AshJido.RowBackedStateTest do
     use AgentFixture, PostgresCase
   end
 
+  defmodule SQLiteScopedAgent do
+    use AgentFixture, SQLiteScopedCase
+  end
+
+  defmodule PostgresScopedAgent do
+    use AgentFixture, PostgresScopedCase
+  end
+
   describe "SQLite" do
     setup do
       dir = Path.join(System.tmp_dir!(), "ash-jido-state-#{System.unique_integer([:positive])}")
@@ -235,6 +290,7 @@ defmodule AshJido.RowBackedStateTest do
     test("keeps refreshed state private until commit", fixture, do: private_refresh(fixture))
     test("restores the admitted row state of a waiting Flow", fixture, do: restore_waiting_flow(fixture))
     test("rejects a restored Flow after the row version advances", fixture, do: restore_waiting_flow(fixture, :stale))
+    test("starts a composite-key Agent in the selected tenant", do: scoped_start(SQLiteScopedCase, SQLiteScopedAgent))
 
     test "a generated action in the bound agent context cannot write its row", %{id: id, address: address} do
       params = %{case_id: id, priority: 4}
@@ -250,7 +306,7 @@ defmodule AshJido.RowBackedStateTest do
     test "rejects an instance without its shared Ash checkpoint store", %{id: id, agent: agent} do
       start_supervised!({Jido, name: WithoutStore, namespace: "test/no-store"})
 
-      assert {:error, :ash_state_requires_ash_persistence} = State.start_agent(WithoutStore, agent, id)
+      assert {:error, %{code: :state_provider_requires_persistence}} = AshJido.start_agent(WithoutStore, agent, id)
     end
   end
 
@@ -272,6 +328,10 @@ defmodule AshJido.RowBackedStateTest do
     test("keeps refreshed state private until commit", fixture, do: private_refresh(fixture))
     test("restores the admitted row state of a waiting Flow", fixture, do: restore_waiting_flow(fixture))
     test("rejects a restored Flow after the row version advances", fixture, do: restore_waiting_flow(fixture, :stale))
+
+    test("starts a composite-key Agent in the selected tenant",
+      do: scoped_start(PostgresScopedCase, PostgresScopedAgent)
+    )
   end
 
   defp postgres_database do
@@ -304,7 +364,7 @@ defmodule AshJido.RowBackedStateTest do
     store = {AshJido.Persistence.Adapter, [resource: checkpoint]}
     start_supervised!({Jido, name: Runtime, namespace: "test/ash-case-state", persistence: store})
     {:ok, address} = State.address(Runtime, agent, row.case_id)
-    {:ok, server} = State.start_agent(Runtime, agent, row.case_id)
+    {:ok, server} = AshJido.start_agent(Runtime, agent, row.case_id)
     observer = {CommitObserver, row.case_id}
     :persistent_term.put(observer, {self(), repo})
     on_exit(fn -> :persistent_term.erase(observer) end)
@@ -312,6 +372,19 @@ defmodule AshJido.RowBackedStateTest do
   end
 
   defp create_tables(repo, id_type, binary_type, decimal_type) do
+    repo.query!("""
+    CREATE TABLE scoped_cases (
+      tenant_id TEXT NOT NULL,
+      case_id BIGINT NOT NULL,
+      status TEXT NOT NULL,
+      priority BIGINT NOT NULL,
+      budget #{decimal_type} NOT NULL,
+      notes TEXT,
+      version BIGINT NOT NULL DEFAULT 1,
+      PRIMARY KEY (tenant_id, case_id)
+    )
+    """)
+
     repo.query!("""
     CREATE TABLE support_cases (
       case_id #{id_type} PRIMARY KEY NOT NULL,
@@ -395,12 +468,58 @@ defmodule AshJido.RowBackedStateTest do
   end
 
   defp duplicate_owner(fixture) do
-    assert {:error, :ash_state_row_already_bound} =
-             State.start_agent(Runtime, fixture.agent, fixture.id, partition: "different")
+    assert {:error, %{code: :ash_state_row_already_bound}} =
+             AshJido.start_agent(Runtime, fixture.agent, fixture.id, partition: "different")
 
     assert :ok = Jido.stop_agent(Runtime, fixture.server)
     assert :ok = Jido.delete_agent(Runtime, fixture.address)
     assert %{priority: 2, version: 1} = Ash.get!(fixture.resource, fixture.id)
+  end
+
+  defp scoped_start(resource, agent) do
+    for {tenant, priority} <- [{"west", 2}, {"east", 3}] do
+      Ash.create!(resource, %{case_id: 42, status: :open, priority: priority, budget: "12.30"}, tenant: tenant)
+    end
+
+    west = %{tenant_id: "west", case_id: 42}
+    east = %{tenant_id: "east", case_id: 42}
+
+    assert {:error, %{code: :ash_state_source_required, message: message}} = Jido.start_agent(Runtime, agent)
+    assert message =~ "AshJido.row(primary_key)"
+
+    assert {:error, %{code: :invalid_ash_state_tenant}} = AshJido.start_agent(Runtime, agent, west)
+
+    assert {:error, %{code: :invalid_ash_state_identity, message: message}} =
+             AshJido.start_agent(Runtime, agent, %{case_id: 42}, tenant: "west")
+
+    assert message =~ ":case_id"
+    assert message =~ ":tenant_id"
+
+    assert {:error, %{code: :state_source_owns_id}} =
+             Jido.start_agent(Runtime, agent, id: "custom", state: AshJido.row(west, tenant: "west"))
+
+    assert {:error, %{code: :ash_state_row_not_found}} =
+             Jido.start_agent(Runtime, agent, state: AshJido.row(west, tenant: "east"))
+
+    assert {:ok, west_server} =
+             Jido.start_agent(Runtime, agent, state: AshJido.row(%{west | case_id: "42"}, tenant: "west"))
+
+    assert {:ok, east_server} = AshJido.start_agent(Runtime, agent, east, tenant: "east")
+    assert {:ok, west_address} = State.address(Runtime, agent, west, tenant: "west")
+    assert {:ok, east_address} = State.address(Runtime, agent, east, tenant: "east")
+    assert west_address.id != east_address.id
+    assert %{agent: %{id: west_id, state: %{priority: 2}}} = AgentServer.snapshot(west_server)
+    assert %{agent: %{id: east_id, state: %{priority: 3}}} = AgentServer.snapshot(east_server)
+    assert west_id == west_address.id
+    assert east_id == east_address.id
+
+    assert {:ok, %{status: :committed}} = AgentServer.call(west_server, agent.reprioritize_signal!(%{priority: 4}))
+    assert %{priority: 4, version: 2} = Ash.get!(resource, west, tenant: "west")
+    assert %{priority: 3, version: 1} = Ash.get!(resource, east, tenant: "east")
+
+    assert :ok = Jido.stop_agent(Runtime, west_server)
+    assert {:ok, resumed} = Jido.activate_agent(Runtime, west_address)
+    assert %{agent: %{state: %{priority: 4, version: 2}}} = AgentServer.snapshot(resumed)
   end
 
   defp lost_caller(%{address: address, agent: agent, id: id, store: store, resource: resource}) do

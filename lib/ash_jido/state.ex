@@ -26,19 +26,11 @@ defmodule AshJido.State do
   """
   @spec start_agent(module(), module(), term(), keyword()) :: {:ok, pid()} | {:error, term()}
   def start_agent(instance, module, key, opts \\ []) do
-    {tenant, opts} = Keyword.pop(opts, :tenant)
-
-    with {:ok, descriptor} <- descriptor(module),
-         {:ok, config} <- Jido.Persistence.resolve_agent_config(:inherit, instance),
-         {:ok, _transaction} <- Transaction.shared_repo(config, descriptor),
-         {:ok, id} <- Identity.encode(descriptor, key, tenant),
-         {:ok, address} <- Jido.agent_address(instance, id, Keyword.take(opts, [:partition])),
-         {:ok, row, _ash_opts} <- read_for_agent(descriptor, address, nil),
-         {:ok, state} <- Projection.from_record(row, descriptor),
-         {:ok, agent} <- module.instantiate(id: id, state: state),
-         {:ok, server} <- Jido.start_agent(instance, agent, opts),
-         :ok <- Jido.AgentServer.await_ready(server, Keyword.get(opts, :persistence_timeout, 5_000)) do
-      {:ok, server}
+    if Keyword.keyword?(opts) and not Keyword.has_key?(opts, :state) do
+      {row_opts, startup_opts} = Keyword.split(opts, [:tenant])
+      Jido.start_agent(instance, module, Keyword.put(startup_opts, :state, AshJido.row(key, row_opts)))
+    else
+      startup_error(:ash_state_start_options, "Pass startup options as a keyword list and omit :state.")
     end
   end
 
@@ -82,22 +74,90 @@ defmodule AshJido.State do
 
   @impl true
   @doc false
-  def open(descriptor, context, mode, agent, open) do
-    with {:ok, transaction} <- Transaction.shared_repo(context.persistence, descriptor) do
-      Transaction.run(transaction, fn -> open_row(descriptor, context, mode, agent, open) end)
+  def startup_id(descriptor, {key, opts}) do
+    with {:ok, tenant} <- startup_tenant(descriptor.resource, opts) do
+      case Identity.encode(descriptor, key, tenant) do
+        {:ok, id} ->
+          {:ok, id}
+
+        {:error, reason} ->
+          fields = Enum.map_join(descriptor.key, ", ", &inspect/1)
+          startup_error(reason, "Pass a valid Ash primary key. Expected fields #{fields}.")
+      end
     end
   end
 
-  defp open_row(descriptor, context, :create, agent, open) do
-    with {:ok, agent} <- refresh(descriptor, context, agent),
+  def startup_id(_descriptor, _input) do
+    startup_error(:ash_state_source_required, "Pass state: AshJido.row(primary_key) to start this Agent.")
+  end
+
+  defp startup_tenant(resource, opts) do
+    if Keyword.keyword?(opts) and Keyword.keys(opts) in [[], [:tenant]] do
+      tenant = opts[:tenant]
+
+      case validate_tenant(resource, tenant) do
+        :ok -> {:ok, tenant}
+        {:error, reason} -> startup_error(reason, tenant_message(Info.multitenancy_strategy(resource)))
+      end
+    else
+      startup_error(:ash_state_row_options, "AshJido.row/2 accepts only the :tenant option.")
+    end
+  end
+
+  defp tenant_message(:attribute), do: "Pass a nonempty tenant string to AshJido.row/2."
+  defp tenant_message(nil), do: "Omit :tenant for a resource without multitenancy."
+  defp tenant_message(_strategy), do: "Ash-backed Agent state requires attribute multitenancy or an unscoped resource."
+
+  defp startup_error(reason, message), do: Jido.Error.validation_result(reason, [:state], message)
+
+  @impl true
+  @doc false
+  def open(descriptor, context, mode, agent, open) do
+    result =
+      with {:ok, transaction} <- Transaction.shared_repo(context.persistence, descriptor) do
+        {repo, _, _} = transaction
+        Transaction.run(transaction, fn -> open_row(descriptor, context, mode, agent, open, repo) end)
+      end
+
+    startup_result(result, mode, agent)
+  end
+
+  defp startup_result({:error, reason} = error, :create, %{state: nil}) do
+    case reason do
+      :ash_state_row_not_found ->
+        startup_error(reason, "No accessible Ash row matched the primary key and tenant.")
+
+      :ash_state_forbidden ->
+        startup_error(reason, "The configured Ash actor cannot read this resource for Agent startup.")
+
+      :ash_state_row_already_bound ->
+        startup_error(reason, "Another Agent address already owns this Ash row.")
+
+      :ash_state_requires_ash_persistence ->
+        startup_error(reason, "Configure the Jido instance with AshJido.Persistence.Adapter.")
+
+      :ash_state_requires_shared_transaction ->
+        startup_error(reason, "Use the same SQLite or PostgreSQL repo for the Ash row and the Jido checkpoint.")
+
+      _ ->
+        error
+    end
+  end
+
+  defp startup_result(result, _mode, _agent), do: result
+
+  defp open_row(descriptor, context, :create, agent, open, repo) do
+    with {:ok, row, _opts} <- read_for_agent(descriptor, context.address, nil, repo),
+         {:ok, agent} <- merge_projection(agent, row, descriptor),
          :ok <- claim(context, agent.module, :create),
          do: open.(agent)
   end
 
-  defp open_row(descriptor, context, :restore, agent, open) do
+  defp open_row(descriptor, context, :restore, agent, open, repo) do
     with :ok <- claim(context, agent.module, :restore),
          {:ok, saved, revision, agent_revision, turn, handoffs} <- open.(agent),
-         {:ok, refreshed} <- refresh(descriptor, context, saved) do
+         {:ok, row, _opts} <- read_for_agent(descriptor, context.address, nil, repo),
+         {:ok, refreshed} <- merge_projection(saved, row, descriptor) do
       current = if in_flight?(turn), do: saved, else: refreshed
       {:ok, current, revision, agent_revision, turn, handoffs}
     end
@@ -231,13 +291,22 @@ defmodule AshJido.State do
 
   defp merge_projection(agent, row, descriptor) do
     with {:ok, values} <- Projection.from_record(row, descriptor),
-         {:ok, current} <- Jido.Agent.set(agent, values) do
+         {:ok, current} <- apply_projection(agent, values) do
       {:ok, current}
     else
       {:error, %_{} = _error} -> {:error, :invalid_ash_state_projection}
       {:error, _reason} = error -> error
     end
   end
+
+  defp apply_projection(%{state: nil} = agent, values),
+    do:
+      with(
+        {:ok, initialized} <- Jido.Agent.instantiate(Jido.Agent.definition(agent), id: agent.id, state: values),
+        do: Jido.Agent.set(initialized, values)
+      )
+
+  defp apply_projection(agent, values), do: Jido.Agent.set(agent, values)
 
   defp ash_options(descriptor, address, keys, tenant) do
     with :ok <- validate_tenant(descriptor.resource, tenant),

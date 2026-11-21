@@ -67,11 +67,24 @@ defmodule MyApp.Support.CaseAgent do
 end
 
 {:ok, server} =
-  AshJido.State.start_agent(MyApp.Jido, MyApp.Support.CaseAgent, case_id)
+  AshJido.start_agent(MyApp.Jido, MyApp.Support.CaseAgent, case_id)
 
 signal = MyApp.Support.CaseAgent.reprioritize_signal!(%{priority: 4})
 {:ok, %{status: :committed}} = Jido.AgentServer.call(server, signal)
 ```
+
+The direct call uses the same startup path as this form:
+
+```elixir
+Jido.start_agent(MyApp.Jido, MyApp.Support.CaseAgent,
+  state: AshJido.row(case_id),
+  partition: "support"
+)
+```
+
+AshJido derives the Agent ID. Omit `:id` in both forms. If the Agent
+requires a row and you omit it, the error points to `AshJido.row/2`.
+An invalid key error lists the primary key fields.
 
 The route's default state mapping takes the complete next state from the
 Action output. For example, return `{:ok, %{context.agent_state | priority: priority}}`.
@@ -85,7 +98,8 @@ saved values.
 Use a scalar primary key for a single key or a map for a composite key.
 Pass the same `:tenant` for an attribute-multitenant resource on each call
 that constructs the address. Use the tenant attribute's string value as the
-tenant identifier. Agent IDs encode the primary key and tenant, so use
+tenant identifier. Pass it to `AshJido.row/2` or to `AshJido.start_agent/4`.
+Agent IDs encode the primary key and tenant, so use
 identifiers that can appear in logs and telemetry. Use `AshJido.State.address/4` with
 `Jido.activate_agent/3` to restore an existing binding. A second address
 cannot take ownership of the same scoped row in the same checkpoint store.

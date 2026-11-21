@@ -44,6 +44,8 @@ defmodule AshJido do
 
   Use `AshJido.Info.action_modules/1` and `AshJido.Info.descriptors/1` to
   inspect the compiled bridge.
+
+  Use `start_agent/3` to start an Ash-backed Agent for an existing row.
   """
 
   @sections [AshJido.Resource.Dsl.jido_section()]
@@ -58,6 +60,35 @@ defmodule AshJido do
     sections: @sections
 
   @version Mix.Project.config()[:version]
+
+  @doc """
+  Starts a durable Agent for an existing Ash resource row.
+
+  The Agent must declare its resource with `AshJido.State.DSL.ash/2`.
+  Pass the primary key as a scalar or, for a composite key, a map of key
+  fields. Pass `:tenant` in the options for an attribute-multitenant resource.
+  AshJido derives the Agent ID from the row and waits for the Agent to be ready.
+
+  For example:
+
+      AshJido.start_agent(MyApp.Jido, MyApp.Support.CaseAgent, case_id)
+
+  This uses the same startup path and errors as passing `row/2` as the
+  `:state` option to `Jido.start_agent/3`.
+  """
+  @spec start_agent(module(), module(), term(), keyword()) :: {:ok, pid()} | {:error, term()}
+  defdelegate start_agent(instance, agent, primary_key, opts \\ []), to: AshJido.State
+
+  @doc """
+  Builds a row reference for the `:state` option of `Jido.start_agent/3`.
+
+  Pass a scalar primary key or a map of primary key fields. Set `:tenant`
+  for an attribute-multitenant resource. The Agent DSL supplies the resource.
+  """
+  @spec row(term(), keyword()) :: %Jido.AgentServer.StateProvider.Source{}
+  def row(primary_key, opts \\ []) do
+    %Jido.AgentServer.StateProvider.Source{provider: AshJido.State, input: {primary_key, opts}}
+  end
 
   @doc """
   Returns the version of AshJido.
