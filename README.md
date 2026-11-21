@@ -40,7 +40,7 @@ Or use Igniter:
 mix igniter.install ash_jido
 ```
 
-Version 3 uses the Hex releases of `jido`, `jido_action`, and `jido_signal` version 3.
+This branch uses the consolidated `jido` package from Hex at `3.0.0-beta.3`.
 
 ## Define the Ash API
 
