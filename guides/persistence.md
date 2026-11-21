@@ -87,3 +87,6 @@ The adapter never implements compare-and-swap as a separate read and write.
 - Test conflict behavior against the production data layer before deployment.
 
 The ETS data layer is useful for unit tests. It is not a durable production store.
+
+To store Agent domain state in an Ash row, use the same repo for the business
+resource and this store. See [Use an Ash row as Agent state](agent-state.md).

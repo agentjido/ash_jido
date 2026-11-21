@@ -13,7 +13,7 @@ defmodule AshJido.Runtime do
       |> merge_default_options(descriptor.config)
 
     with {:ok, params} <- transform_custom_inputs(params, descriptor) do
-      execute(descriptor, params, ash_opts)
+      execute(descriptor, params, ash_opts, context)
     end
   rescue
     error -> {:error, AshJido.Error.from_ash(error)}
@@ -38,7 +38,7 @@ defmodule AshJido.Runtime do
     end)
   end
 
-  defp execute(%ActionDescriptor{action_type: :create} = descriptor, params, ash_opts) do
+  defp execute(%ActionDescriptor{action_type: :create} = descriptor, params, ash_opts, _context) do
     descriptor.resource
     |> Ash.Changeset.for_create(descriptor.ash_action, params, ash_opts)
     |> maybe_select_changeset(descriptor.select)
@@ -46,7 +46,7 @@ defmodule AshJido.Runtime do
     |> load_and_envelope(descriptor, ash_opts)
   end
 
-  defp execute(%ActionDescriptor{action_type: :read} = descriptor, params, ash_opts) do
+  defp execute(%ActionDescriptor{action_type: :read} = descriptor, params, ash_opts, _context) do
     {query_params, action_params} =
       params
       |> AshJido.QueryParams.normalize_keys()
@@ -71,22 +71,25 @@ defmodule AshJido.Runtime do
     result_envelope(result)
   end
 
-  defp execute(%ActionDescriptor{action_type: :update} = descriptor, params, ash_opts) do
+  defp execute(%ActionDescriptor{action_type: :update} = descriptor, params, ash_opts, context) do
     with {:ok, identity} <- fetch_identity(params, descriptor.identity, :update),
          {:ok, record} <- Ash.get(descriptor.resource, identity, ash_opts),
+         :ok <- AshJido.State.allow_direct_mutation(record, context),
          update_params <- drop_primary_key_params(params, descriptor.identity),
          changeset <- Ash.Changeset.for_update(record, descriptor.ash_action, update_params, ash_opts),
          changeset <- maybe_select_changeset(changeset, descriptor.select),
          {:ok, result} <- Ash.update(changeset, ash_opts) do
       load_and_envelope({:ok, result}, descriptor, ash_opts)
     else
+      {:error, :ash_state_direct_mutation} -> direct_mutation_error()
       {:error, error} -> {:error, AshJido.Error.from_ash(error)}
     end
   end
 
-  defp execute(%ActionDescriptor{action_type: :destroy} = descriptor, params, ash_opts) do
+  defp execute(%ActionDescriptor{action_type: :destroy} = descriptor, params, ash_opts, context) do
     with {:ok, identity} <- fetch_identity(params, descriptor.identity, :destroy),
          {:ok, record} <- Ash.get(descriptor.resource, identity, ash_opts),
+         :ok <- AshJido.State.allow_direct_mutation(record, context),
          destroy_params <- drop_primary_key_params(params, descriptor.identity),
          changeset <- Ash.Changeset.for_destroy(record, descriptor.ash_action, destroy_params, ash_opts),
          result <- Ash.destroy(changeset, ash_opts),
@@ -98,18 +101,19 @@ defmodule AshJido.Runtime do
          metadata: nil
        }}
     else
+      {:error, :ash_state_direct_mutation} -> direct_mutation_error()
       {:error, error} -> {:error, AshJido.Error.from_ash(error)}
     end
   end
 
-  defp execute(%ActionDescriptor{action_type: :action} = descriptor, params, ash_opts) do
+  defp execute(%ActionDescriptor{action_type: :action} = descriptor, params, ash_opts, _context) do
     descriptor.resource
     |> Ash.ActionInput.for_action(descriptor.ash_action, params, ash_opts)
     |> Ash.run_action(ash_opts)
     |> result_envelope()
   end
 
-  defp execute(%ActionDescriptor{action_type: :calculation} = descriptor, params, ash_opts) do
+  defp execute(%ActionDescriptor{action_type: :calculation} = descriptor, params, ash_opts, _context) do
     argument_names = config_value(descriptor.config, :calculation_arguments, [])
     reference_names = config_value(descriptor.config, :calculation_refs, [])
     {arguments, params} = take_fields(params, argument_names)
@@ -123,6 +127,13 @@ defmodule AshJido.Runtime do
     descriptor.resource
     |> Ash.calculate(descriptor.ash_action, options)
     |> result_envelope()
+  end
+
+  defp direct_mutation_error do
+    {:error,
+     Jido.Error.validation_error("Stage changes to the bound Ash row in Agent state", %{
+       reason: :ash_state_direct_mutation
+     })}
   end
 
   defp transform_custom_inputs(params, descriptor) do

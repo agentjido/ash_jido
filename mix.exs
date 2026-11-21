@@ -76,10 +76,12 @@ defmodule AshJido.MixProject do
       # Runtime dependencies
       {:ash, "~> 3.31 and >= 3.34.4"},
       # Use the tested release/v3 contract until the next coordinated Hex release.
-      {:jido, github: "agentjido/jido", ref: "047bf746330a2fbe7c3b25c045552e0303c97eaf", override: true},
+      {:jido, github: "agentjido/jido", ref: "d0b588f0c242b105a479aaaad5c6035d45d73acb", override: true},
       {:zoi, "~> 0.19.0"},
 
       # Dev/Test dependencies
+      {:ash_postgres, "~> 2.15", only: :test},
+      {:ash_sqlite, "~> 0.3.1", only: :test},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:doctor, "~> 0.22", only: :dev, runtime: false},
@@ -133,6 +135,7 @@ defmodule AshJido.MixProject do
         {"guides/getting-started.md", title: "Getting Started"},
         {"guides/flow.md", title: "Jido Flow Composition"},
         {"guides/persistence.md", title: "Ash Persistence Adapter"},
+        {"guides/agent-state.md", title: "Use an Ash Row as Agent State"},
         {"guides/signals.md", title: "Jido Signal Publications"},
         {"guides/v3-migration.md", title: "Migrate to Version 3"},
         {"CHANGELOG.md", title: "Changelog"},
@@ -148,6 +151,7 @@ defmodule AshJido.MixProject do
         "Jido Integration": [
           "guides/flow.md",
           "guides/persistence.md",
+          "guides/agent-state.md",
           "guides/signals.md"
         ],
         Project: [
