@@ -3,7 +3,7 @@ defmodule AshJido.State.DSL do
 
   @doc "Infers the state schema and configures the row binding."
   defmacro ash(resource, options) do
-    if Macro.Env.lookup_import(__CALLER__, {:state_provider, 2}) == [] do
+    if Macro.Env.lookup_import(__CALLER__, {:state_source, 2}) == [] do
       raise CompileError,
         file: __CALLER__.file,
         line: __CALLER__.line,
@@ -13,7 +13,7 @@ defmodule AshJido.State.DSL do
     quote do
       require unquote(resource)
       require Jido.Agent.DSL.State
-      Jido.Agent.DSL.State.state_provider(AshJido.State, {unquote(resource), unquote(options)})
+      Jido.Agent.DSL.State.state_source(AshJido.State, {unquote(resource), unquote(options)})
     end
   end
 end

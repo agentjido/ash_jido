@@ -54,6 +54,15 @@ defmodule AshJido.State.Projection do
     end
   end
 
+  @doc false
+  @spec verify_writable(map(), map(), map()) :: :ok | {:error, term()}
+  def verify_writable(candidate, canonical, descriptor) do
+    case Enum.find(descriptor.writable, &(Map.fetch!(candidate, &1) !== Map.fetch!(canonical, &1))) do
+      nil -> :ok
+      field -> {:error, {:ash_state_writable_field_changed, field}}
+    end
+  end
+
   defp inputs(fields, state, descriptor) do
     Enum.reduce_while(fields, {:ok, %{}}, fn field, {:ok, values} ->
       case decode(Map.get(descriptor.codecs, field), Map.fetch!(state, field)) do

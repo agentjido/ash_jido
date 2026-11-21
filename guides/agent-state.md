@@ -1,8 +1,9 @@
 # Use an Ash row as Agent state
 
-Bind one durable Jido Agent to an existing Ash resource row. AshJido infers
-the Agent schema from the selected fields. An AgentServer Turn writes changes
-through an Ash action and saves the Jido checkpoint in the same transaction.
+Bind one durable Jido Agent to an existing Ash resource row. The
+`AshJido.State` Plugin supplies the Agent's domain schema from the selected
+fields. Jido saves the row changes, checkpoint, and Turn receipt in one
+transaction through the AshJido persistence adapter.
 
 ## Configure the resource
 
@@ -52,8 +53,7 @@ stable namespace.
 
 ```elixir
 defmodule MyApp.Support.CaseAgent do
-  use Jido.Agent, name: "support_case"
-  import AshJido.State.DSL, only: [ash: 2]
+  use Jido.Agent, name: "support_case", plugins: [AshJido.State]
 
   state do
     ash MyApp.Support.Case,
@@ -94,12 +94,15 @@ that address before retrying.
 
 The route's default state mapping takes the complete next state from the
 Action output. For example, return `{:ok, %{context.agent_state | priority: priority}}`.
-The named Ash action then validates the change and may normalize it. On success, the
-Agent snapshot and Ash row contain the canonical values. The checkpoint
-also keeps Jido's private runtime state, including Plugin state. An Action
-output and any Reply, Signal, or Handoff payload built during evaluation keep
-their original values. Use the snapshot or the Ash read action to read the
-saved values.
+The named Ash action validates the change. Each writable field must round
+trip with the exact value the Turn proposed. If Ash changes a writable
+value, the Turn fails with `{:ash_state_writable_field_changed, field}` and
+the transaction rolls back. Canonicalize writable values before returning
+them from the Turn. Ash can still update derived read-only fields and the
+row version. Use the Agent snapshot or the Ash read action to read those
+saved values. The checkpoint also keeps Jido's private runtime state,
+including additive Plugin state. Jido rejects a state projection that
+contains a field outside the schema declared by the Ash state source.
 
 Use a scalar primary key for a single key or a map for a composite key.
 Supported keys use built-in UUID, string, binary, integer, atom, or boolean

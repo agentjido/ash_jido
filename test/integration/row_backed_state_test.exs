@@ -25,11 +25,20 @@ defmodule AshJido.RowBackedStateTest do
     def notify(%{action: %{name: :commit_state}, data: %{case_id: id}}) do
       case :persistent_term.get({__MODULE__, id}, nil) do
         {test, repo} -> send(test, {:notified, id, repo.in_transaction?()})
+        {test, repo, :pause} -> pause(test, repo, id)
         nil -> :ok
       end
     end
 
     def notify(_notification), do: :ok
+
+    defp pause(test, repo, id) do
+      send(test, {:notification_paused, id, repo.in_transaction?()})
+
+      receive do
+        :release_notification -> :ok
+      end
+    end
   end
 
   defmodule ResourceFields do
@@ -87,6 +96,7 @@ defmodule AshJido.RowBackedStateTest do
             change fn changeset, _context ->
               case Ash.Changeset.get_attribute(changeset, :priority) do
                 1 -> Ash.Changeset.add_error(changeset, field: :priority, message: "reserved")
+                4 -> Ash.Changeset.force_change_attribute(changeset, :notes, "reprioritized")
                 5 -> Ash.Changeset.force_change_attribute(changeset, :priority, 4)
                 _ -> changeset
               end
@@ -241,6 +251,7 @@ defmodule AshJido.RowBackedStateTest do
       end
 
       budget = if params[:budget], do: Decimal.new(params.budget), else: state.budget
+      budget = if Decimal.equal?(budget, state.budget), do: state.budget, else: budget
       {:ok, %{state | priority: priority, budget: budget}}
     end
   end
@@ -263,8 +274,7 @@ defmodule AshJido.RowBackedStateTest do
   defmodule AgentFixture do
     defmacro __using__(resource) do
       quote do
-        use Jido.Agent, name: "support_case"
-        import AshJido.State.DSL, only: [ash: 2]
+        use Jido.Agent, name: "support_case", plugins: [AshJido.State]
 
         state do
           ash(unquote(resource),
@@ -314,6 +324,12 @@ defmodule AshJido.RowBackedStateTest do
     test("rejects an Ash transaction hook before it can run", fixture, do: rejects_transaction_hook(fixture))
     test("rejects a repo switch from an Ash action hook", fixture, do: rejects_repo_switch(fixture))
     test("commits the canonical row and receipt with a normal Signal", fixture, do: commits_and_restores(fixture))
+    test("rolls back an Ash action that rewrites a writable field", fixture, do: rejects_normalization(fixture))
+
+    test("recovers a committed result when the worker stops before the reply", fixture,
+      do: commit_before_reply(fixture)
+    )
+
     test("reports an external write conflict and refreshes for the next turn", fixture, do: external_update(fixture))
     test("rolls back a row update when the checkpoint conflicts", fixture, do: checkpoint_conflict(fixture))
     test("does not write a no-op or an invalid state", fixture, do: no_op_and_invalid(fixture))
@@ -355,6 +371,12 @@ defmodule AshJido.RowBackedStateTest do
     test("rejects an Ash transaction hook before it can run", fixture, do: rejects_transaction_hook(fixture))
     test("rejects a repo switch from an Ash action hook", fixture, do: rejects_repo_switch(fixture))
     test("commits the canonical row and receipt with a normal Signal", fixture, do: commits_and_restores(fixture))
+    test("rolls back an Ash action that rewrites a writable field", fixture, do: rejects_normalization(fixture))
+
+    test("recovers a committed result when the worker stops before the reply", fixture,
+      do: commit_before_reply(fixture)
+    )
+
     test("reports an external write conflict and refreshes for the next turn", fixture, do: external_update(fixture))
     test("rolls back a row update when the checkpoint conflicts", fixture, do: checkpoint_conflict(fixture))
     test("does not write a no-op or an invalid state", fixture, do: no_op_and_invalid(fixture))
@@ -403,7 +425,7 @@ defmodule AshJido.RowBackedStateTest do
     observer = {CommitObserver, row.case_id}
     :persistent_term.put(observer, {self(), repo})
     on_exit(fn -> :persistent_term.erase(observer) end)
-    %{resource: resource, id: row.case_id, address: address, server: server, store: store, agent: agent}
+    %{repo: repo, resource: resource, id: row.case_id, address: address, server: server, store: store, agent: agent}
   end
 
   defp create_tables(repo, id_type, binary_type, decimal_type) do
@@ -451,21 +473,67 @@ defmodule AshJido.RowBackedStateTest do
     assert Decimal.equal?(budget, Decimal.new("12.30"))
 
     pending =
-      Jido.submit(Runtime, address, agent.reprioritize_signal!(%{priority: 5}),
+      Jido.submit(Runtime, address, agent.reprioritize_signal!(%{priority: 4}),
         result_handoff: true,
         turn_id: "save-case"
       )
 
     assert {:ok, %{status: :committed, durability: :durable}} = AgentServer.await(pending)
     assert_receive {:notified, ^id, false}, 2_000
-    assert %{priority: 4, version: 2} = Ash.get!(resource, id)
-    assert %{agent: %{state: %{priority: 4, version: 2}}} = AgentServer.snapshot(server)
+    assert %{priority: 4, notes: "reprioritized", version: 2} = Ash.get!(resource, id)
+    assert %{agent: %{state: %{priority: 4, notes: "reprioritized", version: 2}}} = AgentServer.snapshot(server)
     assert {:ok, %{status: :committed, turn_id: "save-case"}} = Jido.turn_result(Runtime, address, "save-case")
 
     assert :ok = Jido.stop_agent(Runtime, server)
     assert {:ok, restored} = Jido.activate_agent(Runtime, address)
     assert %{agent: %{state: %{priority: 4, version: 2}}} = AgentServer.snapshot(restored)
     assert {:ok, %{status: :committed, turn_id: "save-case"}} = Jido.turn_result(Runtime, address, "save-case")
+  end
+
+  defp rejects_normalization(%{resource: resource, id: id, server: server} = fixture) do
+    assert {:ok, %{status: :failed, error: {:ash_state_writable_field_changed, :priority}}} = call(fixture, 5)
+    assert %{priority: 2, version: 1} = Ash.get!(resource, id)
+    assert %{agent: %{state: %{priority: 2, version: 1}}} = AgentServer.snapshot(server)
+    refute_received {:notified, ^id, _}
+  end
+
+  defp commit_before_reply(
+         %{address: address, agent: agent, id: id, repo: repo, server: server, store: store} = fixture
+       ) do
+    test = self()
+    :persistent_term.put({CommitObserver, id}, {test, repo, :pause})
+
+    {caller, caller_monitor} =
+      spawn_monitor(fn ->
+        result =
+          Runtime
+          |> Jido.submit(address, agent.reprioritize_signal!(%{priority: 4}),
+            turn_id: "commit-before-reply",
+            result_handoff: true
+          )
+          |> AgentServer.await()
+
+        send(test, {:turn_result, result})
+      end)
+
+    assert_receive {:notification_paused, ^id, false}, 2_000
+    assert %{priority: 4, version: 2} = Ash.get!(fixture.resource, id)
+    refute_received {:turn_result, _result}
+
+    server_monitor = Process.monitor(server)
+    Process.exit(server, :kill)
+    assert_receive {:DOWN, ^server_monitor, :process, ^server, :killed}, 2_000
+    Process.exit(caller, :kill)
+    assert_receive {:DOWN, ^caller_monitor, :process, ^caller, _reason}, 2_000
+
+    stop_supervised!(Runtime)
+    start_supervised!({Jido, name: Runtime, namespace: "test/ash-case-state", persistence: store})
+
+    assert {:ok, %{status: :committed, turn_id: "commit-before-reply"}} =
+             Jido.turn_result(Runtime, address, "commit-before-reply")
+
+    assert {:ok, restored} = Jido.activate_agent(Runtime, address)
+    assert %{agent: %{state: %{priority: 4, version: 2}}} = AgentServer.snapshot(restored)
   end
 
   defp external_update(fixture) do

@@ -123,8 +123,7 @@ end")
 
     Code.compile_string("""
     defmodule #{inspect(module)} do
-      use Jido.Agent, name: "row_state_probe"
-      import AshJido.State.DSL, only: [ash: 2]
+      use Jido.Agent, name: "row_state_probe", plugins: [AshJido.State]
       #{body}
     end
     """)

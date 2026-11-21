@@ -2,13 +2,16 @@ defmodule AshJido.State do
   @moduledoc """
   Runs one durable Jido Agent for an Ash resource row.
 
-  Import the declaration from AshJido.State.DSL. Configure the Jido instance
-  with the AshJido checkpoint adapter and place both resources in the same
-  database repo. The named update action must advance the row version with
-  Ash optimistic locking.
+  Add this Plugin to the Agent and use its `ash` declaration in the
+  Agent's state block. Configure the Jido instance with the AshJido
+  checkpoint adapter and put both resources in the same database repo.
+  The named update action must advance the row version with Ash optimistic
+  locking.
   """
 
-  @behaviour Jido.AgentServer.StateProvider
+  use Jido.Plugin, imports: [AshJido.State.DSL]
+
+  @behaviour Jido.Persistence.StateSource
 
   require Ash.Query
   require Logger
@@ -70,7 +73,7 @@ defmodule AshJido.State do
 
   @impl true
   @doc false
-  def compile_state!({resource, opts}, env), do: Definition.compile!(resource, opts, env)
+  def state_source({resource, opts}, env), do: Definition.compile!(resource, opts, env)
 
   @impl true
   @doc false
@@ -146,19 +149,20 @@ defmodule AshJido.State do
 
   defp open_row(descriptor, context, :create, agent, open, repo) do
     with {:ok, row, _opts} <- read_for_agent(descriptor, context.address, nil, repo),
-         {:ok, agent} <- merge_projection(agent, row, descriptor),
+         {:ok, values} <- Projection.from_record(row, descriptor),
          :ok <- claim(context, agent.module, :create),
-         do: open.(agent)
+         do: open.(values)
   end
 
   defp open_row(descriptor, context, :restore, agent, open, repo) do
-    with :ok <- claim(context, agent.module, :restore),
-         {:ok, saved, revision, agent_revision, turn, handoffs} <- open.(agent),
-         {:ok, row, _opts} <- read_for_agent(descriptor, context.address, nil, repo),
-         :ok <- same_generation(saved, row, descriptor),
-         {:ok, refreshed} <- merge_projection(saved, row, descriptor) do
-      current = if in_flight?(turn), do: saved, else: refreshed
-      {:ok, current, revision, agent_revision, turn, handoffs}
+    with :ok <- claim(context, agent.module, :restore) do
+      open.(fn saved, turn ->
+        with {:ok, row, _opts} <- read_for_agent(descriptor, context.address, nil, repo),
+             :ok <- same_generation(saved, row, descriptor),
+             {:ok, values} <- Projection.from_record(row, descriptor) do
+          if in_flight?(turn), do: {:ok, %{}}, else: {:ok, values}
+        end
+      end)
     end
   end
 
@@ -184,33 +188,22 @@ defmodule AshJido.State do
     with {:ok, {repo, _opts, _lock}} <- Transaction.shared_repo(context.persistence, descriptor),
          {:ok, row, _opts} <- read_for_agent(descriptor, context.address, nil, repo),
          :ok <- same_generation(agent, row, descriptor),
-         do: merge_projection(agent, row, descriptor)
+         do: Projection.from_record(row, descriptor)
   end
 
   @impl true
   @doc false
-  def commit(descriptor, context, before, candidate, save) do
-    with {:ok, transaction} <- Transaction.shared_repo(context.persistence, descriptor),
-         {:ok, changes, arguments} <- known(Projection.changes(before.state, candidate.state, descriptor)),
-         {:ok, payload, notifications} <-
-           Transaction.run(transaction, fn ->
-             commit_row(descriptor, context, transaction, before, candidate, changes, arguments, save)
-           end) do
-      notify(notifications)
-      {:ok, payload}
-    end
-  end
-
-  defp commit_row(descriptor, context, {repo, _transaction_opts, lock}, before, candidate, changes, arguments, save) do
-    with {:ok, row, opts} <- known(read_for_agent(descriptor, context.address, lock, repo)),
+  def apply_state(descriptor, context, before, candidate, {repo, _transaction_opts, lock}) do
+    with {:ok, changes, arguments} <- known(Projection.changes(before.state, candidate.state, descriptor)),
+         {:ok, row, opts} <- known(read_for_agent(descriptor, context.address, lock, repo)),
          :ok <- known(same_generation(before, row, descriptor)),
          version = Map.fetch!(before.state, descriptor.version),
          :ok <- version_is(row, descriptor.version, version),
          {:ok, saved, notifications} <- write_row(row, changes, arguments, descriptor, opts, version, repo),
          :ok <- known(same_generation(before, saved, descriptor)),
-         {:ok, canonical} <- known(merge_projection(candidate, saved, descriptor)),
-         {:ok, payload} <- save.(canonical) do
-      {:ok, payload, notifications}
+         {:ok, values} <- known(Projection.from_record(saved, descriptor)),
+         :ok <- known(Projection.verify_writable(candidate.state, values, descriptor)) do
+      {:ok, values, after_commit(notifications)}
     end
   end
 
@@ -351,25 +344,6 @@ defmodule AshJido.State do
     end
   end
 
-  defp merge_projection(agent, row, descriptor) do
-    with {:ok, values} <- Projection.from_record(row, descriptor),
-         {:ok, current} <- apply_projection(agent, values) do
-      {:ok, current}
-    else
-      {:error, %_{} = _error} -> {:error, :invalid_ash_state_projection}
-      {:error, _reason} = error -> error
-    end
-  end
-
-  defp apply_projection(%{state: nil} = agent, values),
-    do:
-      with(
-        {:ok, initialized} <- Jido.Agent.instantiate(Jido.Agent.definition(agent), id: agent.id, state: values),
-        do: Jido.Agent.set(initialized, values)
-      )
-
-  defp apply_projection(agent, values), do: Jido.Agent.set(agent, values)
-
   defp ash_options(descriptor, address, keys, tenant) do
     with {:ok, canonical} <- canonical_tenant(descriptor.resource, tenant),
          true <- canonical == tenant,
@@ -458,6 +432,9 @@ defmodule AshJido.State do
   end
 
   defp ash_error(_error), do: :ash_state_action_failed
+
+  defp after_commit([]), do: nil
+  defp after_commit(notifications), do: fn -> notify(notifications) end
 
   defp notify(notifications) do
     case Ash.Notifier.notify(notifications) do

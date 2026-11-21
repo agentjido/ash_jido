@@ -8,14 +8,26 @@ defmodule AshJido.Persistence.Adapter do
   """
 
   @behaviour Jido.Persistence.Store
+  @behaviour Jido.Persistence.TurnTransaction
 
   require Ash.Query
+
+  alias AshJido.State.Transaction
 
   @read_action :ash_jido_persistence_read
   @create_action :ash_jido_persistence_create
   @update_action :ash_jido_persistence_update
   @destroy_action :ash_jido_persistence_destroy
   @allowed_options [:resource, :domain, :tenant, :context, :timeout, :authorize?]
+
+  @impl Jido.Persistence.TurnTransaction
+  def transact(config, {AshJido.State, descriptor}, fun) do
+    with {:ok, transaction} <- Transaction.shared_repo(config, descriptor) do
+      Transaction.run(transaction, fn -> fun.(transaction) end)
+    end
+  end
+
+  def transact(_config, _source, _fun), do: {:error, {:rejected, :ash_state_unsupported_source}}
 
   @impl true
   def validate_options(opts) do

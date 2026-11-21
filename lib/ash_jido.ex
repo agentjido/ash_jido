@@ -64,7 +64,7 @@ defmodule AshJido do
   @doc """
   Starts a durable Agent for an existing Ash resource row.
 
-  The Agent must declare its resource with `AshJido.State.DSL.ash/2`.
+  The Agent uses the `AshJido.State` Plugin and declares its resource with `ash/2`.
   Pass the primary key as a scalar or, for a composite key, a map of key
   fields. Pass `:tenant` in the options for an attribute-multitenant resource.
   AshJido derives the Agent ID from the row and waits for the Agent to be ready.
@@ -85,9 +85,9 @@ defmodule AshJido do
   Pass a scalar primary key or a map of primary key fields. Set `:tenant`
   for an attribute-multitenant resource. The Agent DSL supplies the resource.
   """
-  @spec row(term(), keyword()) :: %Jido.AgentServer.StateProvider.Source{}
+  @spec row(term(), keyword()) :: %Jido.Persistence.StateSource.Source{}
   def row(primary_key, opts \\ []) do
-    %Jido.AgentServer.StateProvider.Source{provider: AshJido.State, input: {primary_key, opts}}
+    %Jido.Persistence.StateSource.Source{provider: AshJido.State, input: {primary_key, opts}}
   end
 
   @doc """
