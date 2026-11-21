@@ -4,6 +4,8 @@ defmodule AshJido.State.Projection do
   alias Ash.Resource.Info
   alias Jido.Codec.Term
 
+  @doc false
+  @spec check(term(), module(), atom(), module() | nil, keyword()) :: :ok | {:error, String.t()}
   def check(value, resource, field, codec, _options) do
     with true <- safe_value?(value),
          {:ok, decoded} <- decode(codec, value),
@@ -14,6 +16,8 @@ defmodule AshJido.State.Projection do
     end
   end
 
+  @doc false
+  @spec from_record(struct(), map()) :: {:ok, map()} | {:error, term()}
   def from_record(record, descriptor) do
     Map.new(descriptor.fields, &{&1, Map.get(descriptor.codecs, &1)})
     |> Enum.reduce_while({:ok, %{}}, fn {field, codec}, {:ok, projection} ->
@@ -28,6 +32,8 @@ defmodule AshJido.State.Projection do
     end)
   end
 
+  @doc false
+  @spec changes(map(), map(), map()) :: {:ok, map(), map()} | {:error, term()}
   def changes(before, candidate, descriptor) do
     read_only = descriptor.fields -- descriptor.writable
 

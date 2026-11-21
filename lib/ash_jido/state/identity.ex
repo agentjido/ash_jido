@@ -6,6 +6,8 @@ defmodule AshJido.State.Identity do
   @prefix "ash-row:v1:"
   @max_id_bytes 4096
 
+  @doc false
+  @spec encode(map(), term(), String.t() | nil) :: {:ok, String.t()} | {:error, :invalid_ash_state_identity}
   def encode(descriptor, key, tenant) when is_binary(tenant) or is_nil(tenant) do
     with {:ok, key} <- cast_key(descriptor, key),
          bytes = :erlang.term_to_binary({descriptor.resource, key, tenant}, [:deterministic]),
@@ -18,6 +20,8 @@ defmodule AshJido.State.Identity do
 
   def encode(_descriptor, _key, _tenant), do: {:error, :invalid_ash_state_identity}
 
+  @doc false
+  @spec decode(map(), String.t()) :: {:ok, map(), String.t() | nil} | {:error, :invalid_ash_state_identity}
   def decode(descriptor, @prefix <> encoded = id) when byte_size(encoded) <= @max_id_bytes * 2 do
     with {:ok, bytes} <- Base.url_decode64(encoded, padding: false),
          true <- byte_size(bytes) <= @max_id_bytes,

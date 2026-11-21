@@ -5,6 +5,10 @@ defmodule AshJido.State.Transaction do
   alias AshJido.Persistence.Adapter
   alias Jido.Persistence.Config
 
+  @type t :: {module(), keyword(), :for_update | nil}
+
+  @doc false
+  @spec shared_repo(Config.t(), map()) :: {:ok, t()} | {:error, term()}
   def shared_repo(%Config{store: {Adapter, opts}}, %{resource: resource, touched_resources: touched}) do
     checkpoint = Keyword.fetch!(opts, :resource)
     layer = Info.data_layer(resource)
@@ -21,6 +25,8 @@ defmodule AshJido.State.Transaction do
 
   def shared_repo(_profile, _resource), do: {:error, :ash_state_requires_ash_persistence}
 
+  @doc false
+  @spec run(t(), (-> result)) :: result | {:error, term()} when result: var
   def run({repo, opts, _lock}, fun) do
     case repo.transaction(
            fn ->

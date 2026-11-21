@@ -6,6 +6,8 @@ defmodule AshJido.State.Definition do
   alias AshJido.State.Projection
   alias Jido.Joi
 
+  @doc false
+  @spec compile!(module(), keyword(), Macro.Env.t()) :: {Jido.Joi.schema(), map()}
   def compile!(resource, opts, env) do
     unless is_atom(resource) and match?({:module, ^resource}, Code.ensure_compiled(resource)) and
              Info.resource?(resource) do

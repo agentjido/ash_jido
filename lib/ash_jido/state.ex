@@ -24,6 +24,7 @@ defmodule AshJido.State do
   partition and tenant to recover the stable address. All other options
   apply to Jido.start_agent/3.
   """
+  @spec start_agent(module(), module(), term(), keyword()) :: {:ok, pid()} | {:error, term()}
   def start_agent(instance, module, key, opts \\ []) do
     {tenant, opts} = Keyword.pop(opts, :tenant)
 
@@ -42,6 +43,7 @@ defmodule AshJido.State do
   end
 
   @doc "Returns the stable Jido address of a resource row."
+  @spec address(module(), module(), term(), keyword()) :: {:ok, Jido.Agent.Address.t()} | {:error, term()}
   def address(instance, module, key, opts \\ []) do
     with {:ok, descriptor} <- descriptor(module),
          {:ok, id} <- Identity.encode(descriptor, key, Keyword.get(opts, :tenant)),
@@ -49,6 +51,7 @@ defmodule AshJido.State do
   end
 
   @doc false
+  @spec allow_direct_mutation(struct(), map()) :: :ok | {:error, :ash_state_direct_mutation}
   def allow_direct_mutation(%resource{} = row, %{agent_id: id, agent_module: module}) do
     with {:ok, %{resource: ^resource} = descriptor} <- descriptor(module),
          {:ok, key, tenant} <- Identity.decode(descriptor, id),
