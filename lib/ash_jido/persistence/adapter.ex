@@ -24,6 +24,16 @@ defmodule AshJido.Persistence.Adapter do
   def transact(config, {AshJido.State, descriptor}, fun) do
     with {:ok, transaction} <- Transaction.shared_repo(config, descriptor) do
       Transaction.run(transaction, fn -> fun.(transaction) end)
+    else
+      {:error, :ash_state_requires_shared_transaction} ->
+        Jido.Error.validation_result(
+          :ash_state_requires_shared_transaction,
+          [:state],
+          "Use the same SQLite or PostgreSQL repo for the Ash row and the Jido checkpoint."
+        )
+
+      {:error, _reason} = error ->
+        error
     end
   end
 

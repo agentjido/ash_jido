@@ -332,6 +332,11 @@ defmodule AshJido.RowBackedStateTest do
 
     test("reports an external write conflict and refreshes for the next turn", fixture, do: external_update(fixture))
     test("rolls back a row update when the checkpoint conflicts", fixture, do: checkpoint_conflict(fixture))
+
+    test("rolls back a row claim when the initial checkpoint conflicts", fixture,
+      do: initial_checkpoint_conflict(fixture)
+    )
+
     test("does not write a no-op or an invalid state", fixture, do: no_op_and_invalid(fixture))
     test("enforces one durable owner across partitions", fixture, do: duplicate_owner(fixture))
     test("retains the committed result after the caller and instance stop", fixture, do: lost_caller(fixture))
@@ -355,6 +360,11 @@ defmodule AshJido.RowBackedStateTest do
       start_supervised!({Jido, name: WithoutStore, namespace: "test/no-store"})
 
       assert {:error, %{code: :state_provider_requires_persistence}} = AshJido.start_agent(WithoutStore, agent, id)
+
+      assert {:ok, address} = State.address(WithoutStore, agent, id)
+
+      assert {:error, %{code: :state_provider_requires_persistence}} =
+               Jido.create_agent(WithoutStore, address, agent, state: AshJido.row(id))
     end
   end
 
@@ -379,6 +389,11 @@ defmodule AshJido.RowBackedStateTest do
 
     test("reports an external write conflict and refreshes for the next turn", fixture, do: external_update(fixture))
     test("rolls back a row update when the checkpoint conflicts", fixture, do: checkpoint_conflict(fixture))
+
+    test("rolls back a row claim when the initial checkpoint conflicts", fixture,
+      do: initial_checkpoint_conflict(fixture)
+    )
+
     test("does not write a no-op or an invalid state", fixture, do: no_op_and_invalid(fixture))
     test("enforces one durable owner across partitions", fixture, do: duplicate_owner(fixture))
     test("retains the committed result after the caller and instance stop", fixture, do: lost_caller(fixture))
@@ -560,6 +575,23 @@ defmodule AshJido.RowBackedStateTest do
     refute_received {:notified, _, _}
     assert %{priority: 2, version: 1} = Ash.get!(fixture.resource, fixture.id)
     assert {:ok, ^competing, _} = Store.read(fixture.store, key)
+  end
+
+  defp initial_checkpoint_conflict(%{store: store, resource: resource, agent: agent}) do
+    %{case_id: id} = Ash.create!(resource, %{status: :open, priority: 2, budget: "12.30"})
+    assert {:ok, address} = State.address(Runtime, agent, id)
+    checkpoint_key = Record.agent_key(address)
+    assert :ok = Store.compare_and_swap(store, checkpoint_key, :not_found, "competing checkpoint")
+
+    assert {:error, reason} = Jido.create_agent(Runtime, address, agent, state: AshJido.row(id))
+    assert reason == :conflict or match?({:indeterminate, _}, reason)
+    assert {:ok, "competing checkpoint", _} = Store.read(store, checkpoint_key)
+
+    # A claim left by the failed creation would reject a different partition.
+    assert {:ok, retry_address} = State.address(Runtime, agent, id, partition: "retry")
+    assert {:ok, ^retry_address} = Jido.create_agent(Runtime, retry_address, agent, state: AshJido.row(id))
+    assert {:ok, server} = Jido.activate_agent(Runtime, retry_address)
+    assert %{agent: %{state: %{priority: 2, version: 1}}} = AgentServer.snapshot(server)
   end
 
   defp no_op_and_invalid(fixture) do

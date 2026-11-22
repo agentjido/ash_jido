@@ -17,6 +17,7 @@ defmodule AshJido.State do
   require Logger
 
   alias Ash.Resource.Info
+  alias AshJido.Persistence.Adapter
   alias AshJido.State.{Definition, Identity, Projection, Transaction}
   alias Jido.Persistence.Store
 
@@ -113,15 +114,14 @@ defmodule AshJido.State do
 
   @impl true
   @doc false
-  def open(descriptor, context, mode, agent, open) do
-    result =
-      with {:ok, transaction} <- Transaction.shared_repo(context.persistence, descriptor) do
-        {repo, _, _} = transaction
-        Transaction.run(transaction, fn -> open_row(descriptor, context, mode, agent, open, repo) end)
-      end
-
-    startup_result(result, mode, agent)
+  def load(descriptor, %{persistence: %{store: {Adapter, _}}} = context, mode, agent, {repo, _, _}) do
+    descriptor
+    |> load_row(context, mode, agent, repo)
+    |> startup_result(mode, agent)
   end
+
+  def load(_descriptor, _context, mode, agent, _tx),
+    do: startup_result({:error, :ash_state_requires_ash_persistence}, mode, agent)
 
   defp startup_result({:error, reason} = error, :create, %{state: nil}) do
     case reason do
@@ -137,9 +137,6 @@ defmodule AshJido.State do
       :ash_state_requires_ash_persistence ->
         startup_error(reason, "Configure the Jido instance with AshJido.Persistence.Adapter.")
 
-      :ash_state_requires_shared_transaction ->
-        startup_error(reason, "Use the same SQLite or PostgreSQL repo for the Ash row and the Jido checkpoint.")
-
       _ ->
         error
     end
@@ -147,27 +144,19 @@ defmodule AshJido.State do
 
   defp startup_result(result, _mode, _agent), do: result
 
-  defp open_row(descriptor, context, :create, agent, open, repo) do
+  defp load_row(descriptor, context, :create, agent, repo) do
     with {:ok, row, _opts} <- read_for_agent(descriptor, context.address, nil, repo),
          {:ok, values} <- Projection.from_record(row, descriptor),
          :ok <- claim(context, agent.module, :create),
-         do: open.(values)
+         do: {:ok, values}
   end
 
-  defp open_row(descriptor, context, :restore, agent, open, repo) do
-    with :ok <- claim(context, agent.module, :restore) do
-      open.(fn saved, turn ->
-        with {:ok, row, _opts} <- read_for_agent(descriptor, context.address, nil, repo),
-             :ok <- same_generation(saved, row, descriptor),
-             {:ok, values} <- Projection.from_record(row, descriptor) do
-          if in_flight?(turn), do: {:ok, %{}}, else: {:ok, values}
-        end
-      end)
-    end
+  defp load_row(descriptor, context, :restore, agent, repo) do
+    with :ok <- claim(context, agent.module, :restore),
+         {:ok, row, _opts} <- read_for_agent(descriptor, context.address, nil, repo),
+         :ok <- same_generation(agent, row, descriptor),
+         do: Projection.from_record(row, descriptor)
   end
-
-  defp in_flight?(nil), do: false
-  defp in_flight?(%{status: status}), do: status not in [:completed, :failed, :cancelled]
 
   defp claim(%{persistence: %{store: store}, address: address}, module, mode) do
     key = "ash-jido/row-binding/v1/" <> :crypto.hash(:sha256, address.id)
