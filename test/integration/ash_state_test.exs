@@ -27,13 +27,27 @@ defmodule AshJido.AshStateTest do
     end
 
     actions do
-      defaults([:read, create: [:count], update: [:count]])
+      defaults([:read, create: [:count]])
 
       update :set_count do
+        primary?(true)
         accept([:count])
         require_atomic?(false)
         change(optimistic_lock(:lock_version))
       end
+    end
+  end
+
+  defmodule UnlockedRow do
+    use Ash.Resource, data_layer: :embedded
+
+    attributes do
+      uuid_primary_key(:id)
+      attribute(:lock_version, :integer, allow_nil?: false, default: 1)
+    end
+
+    actions do
+      defaults([:update])
     end
   end
 
@@ -73,10 +87,10 @@ defmodule AshJido.AshStateTest do
 
   defmodule Counter do
     use Jido.Agent, name: "ash_state_counter"
-    import AshJido.State, only: [ash: 2]
+    import AshJido.State, only: [ash: 1]
 
     state do
-      ash(Row, update: :set_count)
+      ash(Row)
     end
 
     # Pause after the state plugin has read the row in the conflict test.
@@ -115,8 +129,19 @@ defmodule AshJido.AshStateTest do
     %{row: Ash.create!(Row, %{count: 10})}
   end
 
-  test "the configured update action must apply optimistic locking" do
-    assert {:error, :invalid_ash_state_resource} = State.normalize(%{resource: Row, update: :update})
+  test "the primary update action must apply optimistic locking" do
+    assert_raise Spark.Error.DslError, ~r/invalid_ash_state_resource/, fn ->
+      Code.compile_string("""
+      defmodule #{inspect(__MODULE__.UnlockedCounter)} do
+        use Jido.Agent, name: "unlocked_counter"
+        import AshJido.State, only: [ash: 1]
+
+        state do
+          ash #{inspect(UnlockedRow)}
+        end
+      end
+      """)
+    end
   end
 
   test "ash must appear inside the Agent state block" do
@@ -124,9 +149,9 @@ defmodule AshJido.AshStateTest do
       Code.compile_string("""
       defmodule #{inspect(__MODULE__.AshOutsideState)} do
         use Jido.Agent, name: "ash_outside_state"
-        import AshJido.State, only: [ash: 2]
+        import AshJido.State, only: [ash: 1]
 
-        ash #{inspect(Row)}, update: :set_count
+        ash #{inspect(Row)}
       end
       """)
     end
@@ -138,10 +163,10 @@ defmodule AshJido.AshStateTest do
         Code.compile_string("""
         defmodule #{inspect(__MODULE__.ConflictingState)} do
           use Jido.Agent, name: "ash_conflicting_state"
-          import AshJido.State, only: [ash: 2]
+          import AshJido.State, only: [ash: 1]
 
           state do
-            ash #{inspect(Row)}, update: :set_count
+            ash #{inspect(Row)}
             #{declaration}
           end
         end
@@ -158,7 +183,7 @@ defmodule AshJido.AshStateTest do
 
     pending = AgentServer.submit(server, add_signal(2), context: %{writer: self()})
     assert_receive {:row_loaded, admission}, 2_000
-    assert %{count: 40, lock_version: 3} = Ash.update!(row, %{count: 40}, action: :set_count)
+    assert %{count: 40, lock_version: 3} = Ash.update!(row, %{count: 40})
     send(admission, :write_finished)
 
     assert {:ok, %TurnResult{status: :failed, error: :stale_ash_state}} = AgentServer.await(pending)

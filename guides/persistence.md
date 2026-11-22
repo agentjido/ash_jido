@@ -90,14 +90,14 @@ The ETS data layer is useful for unit tests. It is not a durable production stor
 
 ## Use a resource row as Agent state
 
-Declare the resource and its update action in the Agent's `state` block.
+Declare the resource in the Agent's `state` block.
 
 ```elixir
 use Jido.Agent, name: "counter"
-import AshJido.State, only: [ash: 2]
+import AshJido.State, only: [ash: 1]
 
 state do
-  ash MyApp.Counter, update: :set_count
+  ash MyApp.Counter
 end
 ```
 
@@ -107,6 +107,7 @@ in the block.
 Use the row's primary key as the Agent ID. The Plugin reads the row at Turn
 admission. Read it in an Action through
 `context.plugin_inputs[AshJido.State].runtime.row` and return
-`AshJido.State.update(attrs)` as a Directive to propose a change. The update
-action must use `optimistic_lock(:lock_version)`. A stale proposal fails the
-Turn. Disable Jido persistence for writes to this resource row.
+`AshJido.State.update(attrs)` as a Directive to propose a change. The resource's
+primary update action must always apply `optimistic_lock(:lock_version)`.
+A stale proposal fails the Turn. Disable Jido persistence for writes to this
+resource row.

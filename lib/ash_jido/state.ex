@@ -2,10 +2,10 @@ defmodule AshJido.State do
   @moduledoc """
   Uses an existing Ash resource row as the source of Agent state.
 
-  Import `ash/2` and declare `ash Counter, update: :set_count` in the Agent's
+  Import `ash/1` and declare `ash Counter` in the Agent's
   `state` block. This registers the Plugin. Use an unscoped resource with one
-  primary key, an integer `:lock_version` attribute, and an update action
-  with `change optimistic_lock(:lock_version)`. All writers must advance
+  primary key, an integer `:lock_version` attribute, and a primary update
+  action with `change optimistic_lock(:lock_version)`. All writers must advance
   `:lock_version`.
 
   Read the row from `context.plugin_inputs[AshJido.State].runtime.row`.
@@ -22,8 +22,8 @@ defmodule AshJido.State do
   alias Jido.Joi
   alias Spark.Dsl.Extension
 
-  @doc "Declares one Ash resource and its update action in an Agent's `state` block."
-  defmacro ash(resource, options) do
+  @doc "Declares an Ash resource in an Agent's `state` block."
+  defmacro ash(resource) do
     caller = __CALLER__
 
     # Spark imports the state options only inside the state block.
@@ -34,20 +34,8 @@ defmodule AshJido.State do
         description: "declare ash inside the Agent's state block"
     end
 
-    case options do
-      [update: action] ->
-        quote do
-          Jido.Agent.DSL.register_plugin!(
-            {AshJido.State, %{resource: unquote(resource), update: unquote(action)}},
-            __ENV__
-          )
-        end
-
-      _other ->
-        raise CompileError,
-          file: caller.file,
-          line: caller.line,
-          description: "expected ash Resource, update: :action"
+    quote do
+      Jido.Agent.DSL.register_plugin!({AshJido.State, %{resource: unquote(resource)}}, __ENV__)
     end
   end
 
@@ -82,14 +70,13 @@ defmodule AshJido.State do
   end
 
   @impl Jido.Agent.Extension
-  def normalize(%{resource: resource, update: action} = config)
-      when is_atom(resource) and is_atom(action) and map_size(config) == 2 do
+  def normalize(%{resource: resource} = config) when is_atom(resource) and map_size(config) == 1 do
     with {:module, ^resource} <- Code.ensure_compiled(resource),
          true <- Info.resource?(resource),
          nil <- Info.multitenancy_strategy(resource),
          [key] when key != :lock_version <- Info.primary_key(resource),
          %{type: Ash.Type.Integer, allow_nil?: false} <- Info.attribute(resource, :lock_version),
-         %{type: :update, manual?: false, changes: changes} <- Info.action(resource, action),
+         %{manual?: false, changes: changes} <- Info.primary_action(resource, :update),
          true <- Enum.any?(changes, &optimistic_lock?/1) do
       {:ok, config}
     else
@@ -147,12 +134,12 @@ defmodule AshJido.State do
   def before_commit(
         _runtime,
         %{plugin_state: attrs, runtime_input: %{row: %resource{} = row, ash_opts: ash_opts}},
-        opts
+        _opts
       ) do
     protected = [:lock_version | Info.primary_key(resource)]
 
     if Enum.all?(Map.keys(attrs), &(is_atom(&1) and &1 not in protected)),
-      do: save(row, attrs, Keyword.put(ash_opts, :action, Keyword.fetch!(opts, :update))),
+      do: save(row, attrs, ash_opts),
       else: {:error, :invalid_ash_state_changes}
   end
 
