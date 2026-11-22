@@ -87,3 +87,20 @@ The adapter never implements compare-and-swap as a separate read and write.
 - Test conflict behavior against the production data layer before deployment.
 
 The ETS data layer is useful for unit tests. It is not a durable production store.
+
+## Use a resource row as Agent state
+
+Register `AshJido.State` with the resource and the update action.
+
+```elixir
+use Jido.Agent,
+  name: "counter",
+  plugins: [{AshJido.State, %{resource: MyApp.Counter, update: :set_count}}]
+```
+
+Use the row's primary key as the Agent ID. The Plugin reads the row at Turn
+admission. Read it in an Action through
+`context.plugin_inputs[AshJido.State].runtime.row` and return
+`AshJido.State.update(attrs)` as a Directive to propose a change. The update
+action must use `optimistic_lock(:lock_version)`. A stale proposal fails the
+Turn. Disable Jido persistence for writes to this resource row.

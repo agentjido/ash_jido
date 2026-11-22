@@ -33,4 +33,4 @@ mix setup
 mix test
 ```
 
-The fixture depends on the parent AshJido checkout. Its Jido dependencies resolve from published Hex packages through the parent package.
+The fixture uses the Jido dependency declared in the parent AshJido checkout.

@@ -75,11 +75,12 @@ defmodule AshJido.MixProject do
     [
       # Runtime dependencies
       {:ash, "~> 3.31 and >= 3.34.4"},
-      # Use the tested release/v3 contract until the next coordinated Hex release.
-      {:jido, github: "agentjido/jido", ref: "047bf746330a2fbe7c3b25c045552e0303c97eaf", override: true},
+      # Pin Jido until a Hex release includes the pre-commit API.
+      {:jido, github: "agentjido/jido", ref: "b9dd510ab80441d69d712f45911a53413933d601", override: true},
       {:zoi, "~> 0.19.0"},
 
       # Dev/Test dependencies
+      {:ash_sqlite, "~> 0.2.0", only: :test},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:doctor, "~> 0.22", only: :dev, runtime: false},
