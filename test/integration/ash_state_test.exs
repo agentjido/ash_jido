@@ -72,9 +72,15 @@ defmodule AshJido.AshStateTest do
   end
 
   defmodule Counter do
-    use Jido.Agent,
-      name: "ash_state_counter",
-      plugins: [{State, %{resource: Row, update: :set_count}}, AdmissionBarrier]
+    use Jido.Agent, name: "ash_state_counter"
+    import AshJido.State, only: [ash: 2]
+
+    state do
+      ash(Row, update: :set_count)
+    end
+
+    # Pause after the state plugin has read the row in the conflict test.
+    Jido.Agent.DSL.register_plugin!(AdmissionBarrier, __ENV__)
 
     routes do
       signal_source "/test/ash-state"
@@ -111,6 +117,37 @@ defmodule AshJido.AshStateTest do
 
   test "the configured update action must apply optimistic locking" do
     assert {:error, :invalid_ash_state_resource} = State.normalize(%{resource: Row, update: :update})
+  end
+
+  test "ash must appear inside the Agent state block" do
+    assert_raise CompileError, ~r/declare ash inside the Agent's state block/, fn ->
+      Code.compile_string("""
+      defmodule #{inspect(__MODULE__.AshOutsideState)} do
+        use Jido.Agent, name: "ash_outside_state"
+        import AshJido.State, only: [ash: 2]
+
+        ash #{inspect(Row)}, update: :set_count
+      end
+      """)
+    end
+  end
+
+  test "ash rejects other state declarations" do
+    for declaration <- ["schema Jido.Joi.object(%{})", "initial_state %{}", "ecto #{inspect(Row)}"] do
+      assert_raise Spark.Error.DslError, ~r/ash cannot be combined/, fn ->
+        Code.compile_string("""
+        defmodule #{inspect(__MODULE__.ConflictingState)} do
+          use Jido.Agent, name: "ash_conflicting_state"
+          import AshJido.State, only: [ash: 2]
+
+          state do
+            ash #{inspect(Row)}, update: :set_count
+            #{declaration}
+          end
+        end
+        """)
+      end
+    end
   end
 
   test "a stale proposal fails and the next Turn reads the newer row", %{row: row} do

@@ -90,13 +90,19 @@ The ETS data layer is useful for unit tests. It is not a durable production stor
 
 ## Use a resource row as Agent state
 
-Register `AshJido.State` with the resource and the update action.
+Declare the resource and its update action in the Agent's `state` block.
 
 ```elixir
-use Jido.Agent,
-  name: "counter",
-  plugins: [{AshJido.State, %{resource: MyApp.Counter, update: :set_count}}]
+use Jido.Agent, name: "counter"
+import AshJido.State, only: [ash: 2]
+
+state do
+  ash MyApp.Counter, update: :set_count
+end
 ```
+
+This declaration registers the plugin. Use it as the only state declaration
+in the block.
 
 Use the row's primary key as the Agent ID. The Plugin reads the row at Turn
 admission. Read it in an Action through

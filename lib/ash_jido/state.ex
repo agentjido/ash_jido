@@ -2,11 +2,11 @@ defmodule AshJido.State do
   @moduledoc """
   Uses an existing Ash resource row as the source of Agent state.
 
-  Add `{AshJido.State, %{resource: Counter, update: :set_count}}` to the Agent's
-  Plugins. Leave its Agent state schema empty. Use an unscoped resource with
-  one primary key, an integer `:lock_version` attribute, and an update
-  action with `change optimistic_lock(:lock_version)`. All writers must
-  advance `:lock_version`.
+  Import `ash/2` and declare `ash Counter, update: :set_count` in the Agent's
+  `state` block. This registers the Plugin. Use an unscoped resource with one
+  primary key, an integer `:lock_version` attribute, and an update action
+  with `change optimistic_lock(:lock_version)`. All writers must advance
+  `:lock_version`.
 
   Read the row from `context.plugin_inputs[AshJido.State].runtime.row`.
   Return an `update/1` Directive to propose a write. Disable Jido persistence
@@ -20,6 +20,36 @@ defmodule AshJido.State do
   alias Ash.Resource.Info
   alias AshJido.Error
   alias Jido.Joi
+  alias Spark.Dsl.Extension
+
+  @doc "Declares one Ash resource and its update action in an Agent's `state` block."
+  defmacro ash(resource, options) do
+    caller = __CALLER__
+
+    # Spark imports the state options only inside the state block.
+    if Macro.Env.lookup_import(caller, {:initial_state, 1}) == [] do
+      raise CompileError,
+        file: caller.file,
+        line: caller.line,
+        description: "declare ash inside the Agent's state block"
+    end
+
+    case options do
+      [update: action] ->
+        quote do
+          Jido.Agent.DSL.register_plugin!(
+            {AshJido.State, %{resource: unquote(resource), update: unquote(action)}},
+            __ENV__
+          )
+        end
+
+      _other ->
+        raise CompileError,
+          file: caller.file,
+          line: caller.line,
+          description: "expected ash Resource, update: :action"
+    end
+  end
 
   defmodule Update do
     @moduledoc "Proposes one Ash row update in the current Turn."
@@ -37,6 +67,19 @@ defmodule AshJido.State do
   @doc "Returns a Directive that proposes attributes for the admitted row."
   @spec update(map()) :: struct()
   def update(attrs) when is_map(attrs) and not is_struct(attrs), do: %Update{attrs: attrs}
+
+  @impl Jido.Agent.Extension
+  def lower(dsl, config) do
+    if Enum.any?([:schema, :initial_state, :ecto], &match?({:ok, _}, Extension.fetch_opt(dsl, [:__state__], &1))) do
+      Jido.Error.validation_result(
+        :ash_state_schema_conflict,
+        [:state, :ash],
+        "ash cannot be combined with schema, initial_state, or ecto"
+      )
+    else
+      {:ok, config}
+    end
+  end
 
   @impl Jido.Agent.Extension
   def normalize(%{resource: resource, update: action} = config)
