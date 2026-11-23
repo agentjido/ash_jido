@@ -74,7 +74,7 @@ defmodule AshJido.MixProject do
   defp deps do
     [
       # Runtime dependencies
-      {:ash, "~> 3.31 and >= 3.34.4"},
+      {:ash, "~> 3.31 and >= 3.37.2"},
       {:jido, "== 3.0.0-beta.3"},
       {:zoi, "~> 0.19.0"},
 
