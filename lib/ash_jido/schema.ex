@@ -7,15 +7,10 @@ defmodule AshJido.Schema do
   @default_belongs_to_type Application.compile_env(:ash, :default_belongs_to_type, :uuid)
 
   @doc false
-  @spec build_parameter_schema(struct(), struct() | map(), Spark.Dsl.t()) :: Zoi.schema()
-  def build_parameter_schema(ash_action, config, dsl_state) do
-    build_input_schema(ash_action, config, {:dsl, dsl_state}, [])
-  end
-
-  @doc false
-  @spec build_parameter_schema(module(), struct(), struct() | map(), keyword()) :: Zoi.schema()
-  def build_parameter_schema(resource, ash_action, config, opts) when is_atom(resource) do
-    build_input_schema(ash_action, config, {:resource, resource}, opts)
+  @spec build_parameter_schema(module() | Spark.Dsl.t(), struct(), struct() | map(), keyword()) ::
+          Zoi.schema()
+  def build_parameter_schema(resource_or_dsl, ash_action, config, opts) do
+    build_input_schema(ash_action, config, source(resource_or_dsl), opts)
   end
 
   @doc false
@@ -122,7 +117,7 @@ defmodule AshJido.Schema do
   def identity_fields(resource, nil), do: primary_key_fields(resource)
 
   defp build_input_schema(ash_action, config, source, opts) do
-    identity_fields = Keyword.get(opts, :identity_fields, default_identity_fields(ash_action, source, config))
+    identity_fields = Keyword.fetch!(opts, :identity_fields)
     excluded_inputs = MapSet.new(Keyword.get(opts, :exclude_inputs, []))
     custom_inputs = Keyword.get(opts, :custom_inputs, [])
 
@@ -141,22 +136,6 @@ defmodule AshJido.Schema do
     fields
     |> Map.new()
     |> Zoi.object(unrecognized_keys: :error)
-  end
-
-  defp default_identity_fields(%{type: type}, source, config) when type in [:update, :destroy] do
-    identity_fields_for_source(source, config_value(config, :identity))
-  end
-
-  defp default_identity_fields(_ash_action, _source, _config), do: []
-
-  defp identity_fields_for_source({:resource, resource}, identity), do: identity_fields(resource, identity)
-  defp identity_fields_for_source({:dsl, dsl_state}, nil), do: primary_key_fields(dsl_state)
-  defp identity_fields_for_source({:dsl, _dsl_state}, false), do: []
-  defp identity_fields_for_source({:dsl, _dsl_state}, fields) when is_list(fields), do: fields
-
-  defp identity_fields_for_source({:dsl, _dsl_state}, identity) do
-    raise ArgumentError,
-          "AshJido: named identity #{inspect(identity)} is supported from a domain declaration"
   end
 
   defp accepted_attribute_fields(ash_action, source, config) do

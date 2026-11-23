@@ -9,35 +9,37 @@ defmodule AshJido.Generator do
   @unsafe_interface_options [:actor, :tenant, :authorize?, :domain, :scope, :tracer, :context]
 
   @doc false
-  @spec generate_jido_action_module(module(), JidoAction.t(), Spark.Dsl.t()) :: module()
-  def generate_jido_action_module(resource, config, dsl_state) do
-    descriptor = build_descriptor(resource, config, dsl_state)
-    compile_descriptor!(descriptor)
+  @spec compile_actions(Spark.Dsl.t(), [ActionDescriptor.t()], unique_names?: boolean()) ::
+          {:ok, Spark.Dsl.t()}
+  def compile_actions(dsl_state, descriptors, unique_names?: unique_names?) do
+    owner = Transformer.get_persisted(dsl_state, :module)
+
+    if unique_names?, do: validate_unique!(owner, descriptors, :name, "Jido Action name")
+    validate_unique!(owner, descriptors, :module, "generated module")
+
+    descriptors = Enum.map(descriptors, &compile_descriptor!/1)
+
+    {:ok,
+     dsl_state
+     |> Transformer.persist(:generated_jido_modules, Enum.map(descriptors, & &1.module))
+     |> Transformer.persist(:ash_jido_descriptors, descriptors)}
+  end
+
+  defp validate_unique!(owner, descriptors, key, label) do
+    descriptors
+    |> Enum.frequencies_by(&Map.fetch!(&1, key))
+    |> Enum.each(fn
+      {value, count} when count > 1 ->
+        raise ArgumentError, "AshJido: duplicate #{label} #{inspect(value)} in #{inspect(owner)}"
+
+      _entry ->
+        :ok
+    end)
   end
 
   @doc false
-  @spec generate_interface_action_module(module(), module(), Ash.Resource.Interface.t(), Exposure.t()) ::
-          module()
-  def generate_interface_action_module(domain, resource, interface, exposure) do
-    descriptor = build_interface_descriptor(domain, resource, interface, exposure)
-    compile_descriptor!(descriptor)
-  end
-
-  @doc false
-  @spec generate_calculation_action_module(
-          module(),
-          module(),
-          Ash.Resource.CalculationInterface.t(),
-          Exposure.t()
-        ) :: module()
-  def generate_calculation_action_module(domain, resource, interface, exposure) do
-    descriptor = build_calculation_descriptor(domain, resource, interface, exposure)
-    compile_descriptor!(descriptor)
-  end
-
-  @doc false
-  @spec generate_domain_action_module(module(), JidoAction.t()) :: module()
-  def generate_domain_action_module(domain, %JidoAction{} = declaration) do
+  @spec domain_action_descriptor(module(), JidoAction.t()) :: ActionDescriptor.t()
+  def domain_action_descriptor(domain, %JidoAction{} = declaration) do
     unless is_atom(declaration.resource) and is_atom(declaration.ash_action) do
       raise ArgumentError,
             "AshJido: a domain action requires `action :name, Resource, :ash_action`"
@@ -49,28 +51,30 @@ defmodule AshJido.Generator do
         name: declaration.name || Atom.to_string(declaration.action)
     }
 
-    descriptor =
-      build_compiled_descriptor(
-        domain,
-        declaration.resource,
-        declaration.ash_action,
-        config,
-        {:domain_action, domain, declaration.action}
-      )
+    resource = declaration.resource
+    ash_action = Ash.Resource.Info.action(resource, declaration.ash_action)
 
-    compile_descriptor!(descriptor)
+    unless ash_action do
+      raise ArgumentError,
+            "AshJido: action #{inspect(declaration.ash_action)} was not found on #{inspect(resource)}"
+    end
+
+    validate_config!(resource, ash_action, config)
+
+    build_action_descriptor(resource, ash_action, config, %{
+      domain: domain,
+      resource: resource,
+      source: {:domain_action, domain, declaration.action},
+      module: config.module_name || Module.concat([domain, "Jido", camelize(config.name)]),
+      name: config.name,
+      result_cardinality: result_cardinality(ash_action, nil),
+      identity: action_identity_fields(resource, ash_action, config)
+    })
   end
 
   @doc false
-  @spec target_module_name(module(), JidoAction.t(), Spark.Dsl.t()) :: module()
-  def target_module_name(resource, config, dsl_state) do
-    ash_action = get_dsl_action!(resource, config.action, dsl_state)
-    build_module_name(resource, config, ash_action.name)
-  end
-
-  @doc false
-  @spec build_descriptor(module(), JidoAction.t(), Spark.Dsl.t()) :: ActionDescriptor.t()
-  def build_descriptor(resource, config, dsl_state) do
+  @spec resource_action_descriptor(module(), JidoAction.t(), Spark.Dsl.t()) :: ActionDescriptor.t()
+  def resource_action_descriptor(resource, config, dsl_state) do
     ash_action = get_dsl_action!(resource, config.action, dsl_state)
     domain = Ash.Resource.Info.domain(dsl_state)
 
@@ -81,27 +85,25 @@ defmodule AshJido.Generator do
 
     validate_config!(resource, ash_action, config)
 
-    cardinality = result_cardinality(ash_action, nil)
-    identity_fields = dsl_identity_fields(dsl_state, ash_action, config)
-    input_schema = AshJido.Schema.build_parameter_schema(ash_action, config, dsl_state)
-    output_schema = AshJido.Schema.build_output_schema(dsl_state, ash_action, cardinality, config)
-
-    descriptor(
-      domain,
-      resource,
-      ash_action,
-      config,
-      {:resource, resource, ash_action.name},
-      build_module_name(resource, config, ash_action.name),
-      config.name || default_action_name(resource, ash_action),
-      cardinality,
-      identity_fields,
-      input_schema,
-      output_schema
-    )
+    build_action_descriptor(dsl_state, ash_action, config, %{
+      domain: domain,
+      resource: resource,
+      source: {:resource, resource, ash_action.name},
+      module: config.module_name || Module.concat([resource, "Jido", camelize(ash_action.name)]),
+      name: config.name || default_action_name(resource, ash_action),
+      result_cardinality: result_cardinality(ash_action, nil),
+      identity: action_identity_fields(dsl_state, ash_action, config)
+    })
   end
 
-  defp build_interface_descriptor(domain, resource, interface, exposure) do
+  @doc false
+  @spec interface_descriptor(
+          module(),
+          module(),
+          Ash.Resource.Interface.t() | Ash.Resource.CalculationInterface.t(),
+          Exposure.t()
+        ) :: ActionDescriptor.t()
+  def interface_descriptor(domain, resource, %Ash.Resource.Interface{} = interface, exposure) do
     ash_action = Ash.Resource.Info.action(resource, interface.action)
 
     unless ash_action do
@@ -129,32 +131,26 @@ defmodule AshJido.Generator do
         not_found_error?: interface.not_found_error?
       })
 
-    input_schema =
-      AshJido.Schema.build_parameter_schema(resource, ash_action, config,
-        identity_fields: interface_filter_fields(resource, interface),
-        exclude_inputs: interface.exclude_inputs || [],
-        custom_inputs: interface.custom_inputs || []
-      )
-
-    output_schema = AshJido.Schema.build_output_schema(resource, ash_action, cardinality, config)
-    module_name = exposure.module_name || Module.concat([domain, "Jido", camelize(interface.name)])
-
-    descriptor(
-      domain,
+    build_action_descriptor(
       resource,
       ash_action,
       config,
-      {:code_interface, domain, interface.name},
-      module_name,
-      exposure.name || Atom.to_string(interface.name),
-      cardinality,
-      identity_fields,
-      input_schema,
-      output_schema
+      %{
+        domain: domain,
+        resource: resource,
+        source: {:code_interface, domain, interface.name},
+        module: exposure.module_name || Module.concat([domain, "Jido", camelize(interface.name)]),
+        name: exposure.name || Atom.to_string(interface.name),
+        result_cardinality: cardinality,
+        identity: identity_fields
+      },
+      identity_fields: interface_filter_fields(resource, interface),
+      exclude_inputs: config.exclude_inputs,
+      custom_inputs: config.custom_inputs
     )
   end
 
-  defp build_calculation_descriptor(domain, resource, interface, exposure) do
+  def interface_descriptor(domain, resource, %Ash.Resource.CalculationInterface{} = interface, exposure) do
     calculation = Ash.Resource.Info.calculation(resource, interface.calculation)
 
     unless calculation do
@@ -206,78 +202,38 @@ defmodule AshJido.Generator do
       primary_key: AshJido.Schema.primary_key_fields(resource)
     }
 
-    struct!(ActionDescriptor, Map.put(attrs, :fingerprint, fingerprint(attrs)))
+    ActionDescriptor.new!(attrs)
   end
 
-  defp build_compiled_descriptor(domain, resource, action_name, config, source) do
-    ash_action = Ash.Resource.Info.action(resource, action_name)
+  defp build_action_descriptor(schema_source, ash_action, config, attrs, input_options \\ []) do
+    input_options = Keyword.put_new(input_options, :identity_fields, attrs.identity)
+    id = "#{inspect(attrs.domain)}:#{inspect(attrs.resource)}:#{ash_action.name}:#{inspect(attrs.source)}"
 
-    unless ash_action do
-      raise ArgumentError,
-            "AshJido: action #{inspect(action_name)} was not found on #{inspect(resource)}"
-    end
-
-    validate_config!(resource, ash_action, config)
-    identity_fields = compiled_identity_fields(resource, ash_action, config)
-    cardinality = result_cardinality(ash_action, nil)
-    input_schema = AshJido.Schema.build_parameter_schema(resource, ash_action, config, [])
-    output_schema = AshJido.Schema.build_output_schema(resource, ash_action, cardinality, config)
-    module_name = config.module_name || Module.concat([domain, "Jido", camelize(config.name)])
-
-    descriptor(
-      domain,
-      resource,
-      ash_action,
-      config,
-      source,
-      module_name,
-      config.name,
-      cardinality,
-      identity_fields,
-      input_schema,
-      output_schema
-    )
-  end
-
-  defp descriptor(
-         domain,
-         resource,
-         ash_action,
-         config,
-         source,
-         module_name,
-         name,
-         cardinality,
-         identity_fields,
-         input_schema,
-         output_schema
-       ) do
-    attrs = %{
-      id: descriptor_id(domain, resource, ash_action.name, source),
-      name: name,
-      module: module_name,
-      domain: domain,
-      resource: resource,
+    attrs
+    |> Map.merge(%{
+      id: id,
       ash_action: ash_action.name,
       action_type: ash_action.type,
-      source: source,
-      input_schema: input_schema,
-      output_schema: output_schema,
-      result_cardinality: cardinality,
-      identity: identity_fields,
+      input_schema: AshJido.Schema.build_parameter_schema(schema_source, ash_action, config, input_options),
+      output_schema: AshJido.Schema.build_output_schema(schema_source, ash_action, attrs.result_cardinality, config),
       select: config_value(config, :select),
       load: config_value(config, :load),
       config: config,
-      primary_key: AshJido.Schema.primary_key_fields(resource)
-    }
-
-    struct!(ActionDescriptor, Map.put(attrs, :fingerprint, fingerprint(attrs)))
+      primary_key: AshJido.Schema.primary_key_fields(attrs.resource)
+    })
+    |> ActionDescriptor.new!()
   end
 
-  defp compile_descriptor!(descriptor) do
-    module_ast = build_module_ast(descriptor)
-    compile_generated_module!(descriptor.module, descriptor, module_ast)
-    descriptor.module
+  defp compile_descriptor!(%ActionDescriptor{module: module} = descriptor) do
+    case Code.ensure_loaded(module) do
+      {:module, ^module} -> replace_or_reject!(module, descriptor)
+      {:error, _reason} -> emit_module!(descriptor)
+    end
+  end
+
+  defp emit_module!(descriptor) do
+    Code.compile_quoted(build_module_ast(descriptor))
+    descriptor
   end
 
   defp build_module_ast(%ActionDescriptor{} = descriptor) do
@@ -312,23 +268,16 @@ defmodule AshJido.Generator do
     end
   end
 
-  defp compile_generated_module!(module, descriptor, module_ast) do
-    case Code.ensure_loaded(module) do
-      {:module, ^module} -> replace_or_reject!(module, descriptor, module_ast)
-      {:error, _reason} -> Code.compile_quoted(module_ast)
-    end
-  end
-
-  defp replace_or_reject!(module, descriptor, module_ast) do
+  defp replace_or_reject!(module, descriptor) do
     if function_exported?(module, :__ash_jido__, 0) do
       case module.__ash_jido__() do
-        %ActionDescriptor{fingerprint: fingerprint} when fingerprint == descriptor.fingerprint ->
-          :ok
+        %ActionDescriptor{fingerprint: fingerprint} = existing when fingerprint == descriptor.fingerprint ->
+          existing
 
         %ActionDescriptor{} ->
           :code.purge(module)
           :code.delete(module)
-          Code.compile_quoted(module_ast)
+          emit_module!(descriptor)
 
         _other ->
           raise_module_collision!(module)
@@ -355,10 +304,6 @@ defmodule AshJido.Generator do
     end
   end
 
-  defp build_module_name(resource, config, action_name) do
-    config.module_name || Module.concat([resource, "Jido", camelize(action_name)])
-  end
-
   defp interface_identity_fields(resource, ash_action, interface, exposure) do
     cond do
       not is_nil(exposure.identity) -> AshJido.Schema.identity_fields(resource, exposure.identity)
@@ -377,12 +322,11 @@ defmodule AshJido.Generator do
     end
   end
 
-  defp compiled_identity_fields(resource, %{type: type}, config) when type in [:update, :destroy],
-    do: AshJido.Schema.identity_fields(resource, config_value(config, :identity))
+  defp action_identity_fields(resource, %{type: type}, config)
+       when is_atom(resource) and type in [:update, :destroy],
+       do: AshJido.Schema.identity_fields(resource, config_value(config, :identity))
 
-  defp compiled_identity_fields(_resource, _action, _config), do: []
-
-  defp dsl_identity_fields(dsl_state, %{type: type}, config) when type in [:update, :destroy] do
+  defp action_identity_fields(dsl_state, %{type: type}, config) when type in [:update, :destroy] do
     case config_value(config, :identity) do
       nil -> AshJido.Schema.primary_key_fields(dsl_state)
       false -> []
@@ -391,7 +335,7 @@ defmodule AshJido.Generator do
     end
   end
 
-  defp dsl_identity_fields(_dsl_state, _action, _config), do: []
+  defp action_identity_fields(_source, _action, _config), do: []
 
   defp result_cardinality(%{type: :read}, %{get?: true}), do: :one
   defp result_cardinality(%{type: :read, get?: true}, _interface), do: :one
@@ -458,22 +402,6 @@ defmodule AshJido.Generator do
     raise ArgumentError,
           "AshJido: generated module #{inspect(module)} collides with a module not owned by AshJido"
   end
-
-  defp fingerprint(attrs) do
-    attrs
-    |> Map.update!(:config, &semantic_config/1)
-    |> :erlang.term_to_binary()
-    |> then(&:crypto.hash(:sha256, &1))
-    |> Base.encode16(case: :lower)
-  end
-
-  defp semantic_config(%_{} = config),
-    do: config |> Map.from_struct() |> Map.drop([:__spark_metadata__])
-
-  defp semantic_config(config), do: config
-
-  defp descriptor_id(domain, resource, action_name, source),
-    do: "#{inspect(domain)}:#{inspect(resource)}:#{action_name}:#{inspect(source)}"
 
   defp default_action_name(resource, ash_action) do
     resource_name = resource |> Module.split() |> List.last() |> Macro.underscore()

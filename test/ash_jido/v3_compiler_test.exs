@@ -10,7 +10,8 @@ defmodule AshJido.V3CompilerTest do
              Domain.Jido.RegisterUser,
              Domain.Jido.GetUser,
              Domain.Jido.ListUsers,
-             Domain.Jido.DoubleValue
+             Domain.Jido.DoubleValue,
+             Domain.Jido.LookupUsers
            ]
 
     assert Enum.all?(modules, &match?({:ok, %Runic.Workflow{}}, Jido.Exec.compile(&1, [])))
@@ -18,7 +19,8 @@ defmodule AshJido.V3CompilerTest do
     assert Enum.all?(modules, &function_exported?(&1, :validate_output, 1))
 
     descriptors = AshJido.Info.descriptors(Domain)
-    assert Enum.map(descriptors, & &1.name) == ~w(register_user get_user list_users double_value)
+    assert descriptors == Enum.map(modules, & &1.__ash_jido__())
+    assert Enum.map(descriptors, & &1.name) == ~w(register_user get_user list_users double_value lookup_users)
     assert Enum.all?(descriptors, &(&1.domain == Domain))
     assert Enum.all?(descriptors, &(byte_size(&1.fingerprint) == 64))
   end
@@ -27,12 +29,36 @@ defmodule AshJido.V3CompilerTest do
     get = Domain.Jido.GetUser.__ash_jido__()
     list = Domain.Jido.ListUsers.__ash_jido__()
     calculation = Domain.Jido.DoubleValue.__ash_jido__()
+    direct = Domain.Jido.LookupUsers.__ash_jido__()
 
     assert get.source == {:code_interface, Domain, :get_user}
     assert get.result_cardinality == :one
     assert get.identity == [:id]
     assert list.result_cardinality == :many
     assert calculation.action_type == :calculation
+    assert direct.source == {:domain_action, Domain, :get_user}
+    assert direct.ash_action == :read
+  end
+
+  test "domain declarations cannot emit the same module after a name override" do
+    assert_raise ArgumentError, ~r/duplicate generated module .*Jido.GetUser/, fn ->
+      defmodule ConflictingDomain do
+        use Ash.Domain, validate_config_inclusion?: false, extensions: [AshJido]
+
+        resources do
+          resource AshJido.Test.User do
+            define(:get_user, action: :read, get_by: [:id])
+          end
+        end
+
+        jido do
+          expose(:get_user, name: "fetch_user")
+          action(:lookup_users, AshJido.Test.User, :read, name: "get_user")
+        end
+      end
+    end
+
+    refute Code.ensure_loaded?(ConflictingDomain.Jido.GetUser)
   end
 
   test "schemas are static Zoi schemas with explicit controls" do
