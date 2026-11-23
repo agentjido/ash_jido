@@ -10,7 +10,7 @@ defmodule AshJido.ActorScope do
   @type actor_reference :: %{type: String.t(), id: String.t()}
 
   @callback reference(actor :: term(), context :: map()) :: {:ok, actor_reference()} | {:error, term()}
-  @callback resolve_actor(actor_reference(), context :: map()) :: {:ok, Ash.Resource.record()} | {:error, term()}
+  @callback resolve_actor(actor_reference(), context :: map()) :: {:ok, Ash.Resource.Record.t()} | {:error, term()}
 
   @doc "Builds a Jido caller context with only a portable Ash actor reference and tenant."
   @spec caller_context(term(), term()) :: {:ok, map()} | {:error, atom()}
