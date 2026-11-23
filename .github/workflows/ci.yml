@@ -25,4 +25,5 @@ jobs:
       credo_command: mix credo --min-priority higher
       docs_command: mix docs -f html
       test_command: mix test
-      validate_hex_package: ${{ github.ref != 'refs/heads/release/v3' }}
+      # The v3 integration branch uses a Git dependency until Jido ships the pre-commit API.
+      validate_hex_package: ${{ github.ref != 'refs/heads/release/v3' && github.base_ref != 'release/v3' }}
