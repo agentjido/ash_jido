@@ -4,6 +4,7 @@ defmodule AshJido.Domain.Transformers.CompileActions do
   use Spark.Dsl.Transformer
 
   alias AshJido.Domain.Exposure
+  alias AshJido.Generator
   alias AshJido.Resource.JidoAction
   alias Spark.Dsl.Transformer
 
@@ -26,25 +27,15 @@ defmodule AshJido.Domain.Transformers.CompileActions do
     exposures = Enum.filter(entities, &match?(%Exposure{}, &1))
     direct_actions = Enum.filter(entities, &match?(%JidoAction{}, &1))
 
-    resolved = Enum.map(exposures, &resolve_interface!(domain, references, &1))
-    validate_unique_declarations!(domain, resolved, direct_actions)
+    interfaces =
+      Enum.map(exposures, fn exposure ->
+        {resource, interface} = resolve_interface!(domain, references, exposure)
+        Generator.interface_descriptor(domain, resource, interface, exposure)
+      end)
 
-    modules =
-      Enum.map(resolved, fn
-        {resource, %Ash.Resource.Interface{} = interface, exposure} ->
-          AshJido.Generator.generate_interface_action_module(domain, resource, interface, exposure)
+    actions = Enum.map(direct_actions, &Generator.domain_action_descriptor(domain, &1))
 
-        {resource, %Ash.Resource.CalculationInterface{} = interface, exposure} ->
-          AshJido.Generator.generate_calculation_action_module(domain, resource, interface, exposure)
-      end) ++
-        Enum.map(direct_actions, &AshJido.Generator.generate_domain_action_module(domain, &1))
-
-    descriptors = Enum.map(modules, & &1.__ash_jido__())
-
-    {:ok,
-     dsl_state
-     |> Transformer.persist(:generated_jido_modules, modules)
-     |> Transformer.persist(:ash_jido_descriptors, descriptors)}
+    Generator.compile_actions(dsl_state, interfaces ++ actions, unique_names?: true)
   end
 
   defp resolve_interface!(domain, references, %Exposure{} = exposure) do
@@ -53,7 +44,7 @@ defmodule AshJido.Domain.Transformers.CompileActions do
         reference.resource
         |> definitions(reference)
         |> Enum.filter(&(&1.name == exposure.interface))
-        |> Enum.map(&{reference.resource, &1, exposure})
+        |> Enum.map(&{reference.resource, &1})
       end)
 
     case matches do
@@ -72,7 +63,7 @@ defmodule AshJido.Domain.Transformers.CompileActions do
                 "#{inspect(domain)}; available interfaces: #{inspect(available)}"
 
       matches ->
-        resources = Enum.map(matches, fn {resource, _interface, _exposure} -> resource end)
+        resources = Enum.map(matches, fn {resource, _interface} -> resource end)
 
         raise ArgumentError,
               "AshJido: code interface #{inspect(exposure.interface)} is ambiguous in " <>
@@ -86,43 +77,4 @@ defmodule AshJido.Domain.Transformers.CompileActions do
       definitions -> definitions
     end
   end
-
-  defp validate_unique_declarations!(domain, resolved, direct_actions) do
-    names =
-      Enum.map(resolved, fn {_resource, interface, exposure} ->
-        exposure.name || Atom.to_string(interface.name)
-      end) ++
-        Enum.map(direct_actions, fn declaration ->
-          declaration.name || Atom.to_string(declaration.action)
-        end)
-
-    case duplicate(names) do
-      nil -> :ok
-      name -> raise ArgumentError, "AshJido: duplicate Jido Action name #{inspect(name)} in #{inspect(domain)}"
-    end
-
-    modules =
-      Enum.map(resolved, fn {_resource, interface, exposure} ->
-        exposure.module_name || Module.concat([domain, "Jido", camelize(interface.name)])
-      end) ++
-        Enum.map(direct_actions, fn declaration ->
-          declaration.module_name || Module.concat([domain, "Jido", camelize(declaration.action)])
-        end)
-
-    case duplicate(modules) do
-      nil -> :ok
-      module -> raise ArgumentError, "AshJido: duplicate generated module #{inspect(module)} in #{inspect(domain)}"
-    end
-  end
-
-  defp duplicate(values) do
-    values
-    |> Enum.frequencies()
-    |> Enum.find_value(fn
-      {value, count} when count > 1 -> value
-      _entry -> nil
-    end)
-  end
-
-  defp camelize(value), do: value |> to_string() |> Macro.camelize()
 end
