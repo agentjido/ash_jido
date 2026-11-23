@@ -22,6 +22,8 @@ defmodule AshJido.Context do
       raise ArgumentError, "AshJido: context cannot disable Ash authorization"
     end
 
+    ash_context = resolve_actor!(ash_context)
+
     opts =
       Enum.reduce(@passthrough_keys, [domain: descriptor.domain], fn key, opts ->
         case Map.fetch(ash_context, key) do
@@ -36,4 +38,13 @@ defmodule AshJido.Context do
       opts
     end
   end
+
+  defp resolve_actor!(%{actor_ref: _ref} = scope) do
+    case AshJido.ActorScope.actor(scope) do
+      {:ok, actor} -> Map.put(scope, :actor, actor)
+      {:error, :invalid_actor_reference} -> raise ArgumentError, "AshJido: invalid actor reference"
+    end
+  end
+
+  defp resolve_actor!(scope), do: scope
 end

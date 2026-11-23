@@ -44,6 +44,8 @@ The `release/v3` branch pins the consolidated `jido` package to a GitHub
 commit that includes the pre-commit API. Publishing this branch on Hex requires
 a Jido Hex release with that API.
 
+To expose live Jido Agents through Ash, see the [Agent resource guide](guides/agent-resource.md).
+
 ## Define the Ash API
 
 Define normal Ash actions and public domain code interfaces:
