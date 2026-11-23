@@ -133,6 +133,7 @@ defmodule AshJido.MixProject do
         {"README.md", title: "Home"},
         {"guides/getting-started.md", title: "Getting Started"},
         {"guides/flow.md", title: "Jido Flow Composition"},
+        {"guides/agent-resource.md", title: "Live Agent Resources"},
         {"guides/persistence.md", title: "Ash Persistence Adapter"},
         {"guides/signals.md", title: "Jido Signal Publications"},
         {"guides/v3-migration.md", title: "Migrate to Version 3"},
@@ -148,6 +149,7 @@ defmodule AshJido.MixProject do
         ],
         "Jido Integration": [
           "guides/flow.md",
+          "guides/agent-resource.md",
           "guides/persistence.md",
           "guides/signals.md"
         ],

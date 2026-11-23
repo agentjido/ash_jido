@@ -106,15 +106,16 @@ defmodule AshJido.State do
 
   @impl Jido.Plugin
   def admit(_runtime, admission, opts) do
-    actor = get_in(admission.caller_context, [:ash, :actor])
-    ash_opts = [actor: actor, authorize?: true]
-    read_opts = Keyword.put(ash_opts, :not_found_error?, false)
+    with {:ok, actor} <- AshJido.ActorScope.actor(Map.get(admission.caller_context, :ash, %{})) do
+      ash_opts = [actor: actor, authorize?: true]
+      read_opts = Keyword.put(ash_opts, :not_found_error?, false)
 
-    case Ash.get(Keyword.fetch!(opts, :resource), admission.agent_id, read_opts) do
-      {:ok, %{lock_version: version} = row} when is_integer(version) -> {:ok, %{row: row, ash_opts: ash_opts}}
-      {:ok, nil} -> {:error, :ash_state_not_found}
-      {:ok, _row} -> {:error, :invalid_ash_state_lock_version}
-      {:error, reason} -> {:error, Error.from_ash(reason)}
+      case Ash.get(Keyword.fetch!(opts, :resource), admission.agent_id, read_opts) do
+        {:ok, %{lock_version: version} = row} when is_integer(version) -> {:ok, %{row: row, ash_opts: ash_opts}}
+        {:ok, nil} -> {:error, :ash_state_not_found}
+        {:ok, _row} -> {:error, :invalid_ash_state_lock_version}
+        {:error, reason} -> {:error, Error.from_ash(reason)}
+      end
     end
   end
 
