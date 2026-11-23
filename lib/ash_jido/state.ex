@@ -11,7 +11,9 @@ defmodule AshJido.State do
   Read the row from `context.plugin_inputs[AshJido.State].runtime.row`.
   Return an `update/1` Directive to propose a write. Disable Jido persistence
   for Agents that write the row. Reads and updates use Ash authorization.
-  Set `context.ash.actor` on the Turn when the resource requires an actor.
+  For a Turn in memory, set `context.ash.actor` when the resource requires
+  an actor. Keep actor records and credentials out of durable caller context,
+  which Jido can store in Turn receipts.
   """
 
   use Jido.Plugin

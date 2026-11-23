@@ -74,7 +74,7 @@ defmodule AshJido.MixProject do
   defp deps do
     [
       # Runtime dependencies
-      {:ash, "~> 3.31 and >= 3.34.4"},
+      {:ash, "~> 3.31 and >= 3.37.2"},
       # Pin Jido until a Hex release includes the pre-commit API.
       {:jido, github: "agentjido/jido", ref: "b9dd510ab80441d69d712f45911a53413933d601", override: true},
       {:zoi, "~> 0.19.0"},

@@ -40,7 +40,9 @@ Or use Igniter:
 mix igniter.install ash_jido
 ```
 
-Version 3 uses the Hex releases of `jido`, `jido_action`, and `jido_signal` version 3.
+The `release/v3` branch pins the consolidated `jido` package to a GitHub
+commit that includes the pre-commit API. Publishing this branch on Hex requires
+a Jido Hex release with that API.
 
 ## Define the Ash API
 

@@ -58,4 +58,22 @@ defmodule AshJido.ActionDescriptor do
           config: struct() | map(),
           primary_key: [atom()]
         }
+
+  @doc false
+  @spec new!(map()) :: t()
+  def new!(attrs) do
+    fingerprint =
+      attrs
+      |> Map.update!(:config, &semantic_config/1)
+      |> :erlang.term_to_binary()
+      |> then(&:crypto.hash(:sha256, &1))
+      |> Base.encode16(case: :lower)
+
+    struct!(__MODULE__, Map.put(attrs, :fingerprint, fingerprint))
+  end
+
+  defp semantic_config(%_{} = config),
+    do: config |> Map.from_struct() |> Map.drop([:__spark_metadata__])
+
+  defp semantic_config(config), do: config
 end

@@ -8,7 +8,10 @@ Version 3 is a new contract for Jido version 3. Review generated module names, i
 {:ash_jido, "~> 3.0.0-beta.1"}
 ```
 
-AshJido version 3 uses the Hex releases of `jido`, `jido_action`, `jido_signal`, and `zoi`. Remove local path or Git overrides after the application completes its Jido v3 migration.
+The `release/v3` branch pins the consolidated `jido` package to the GitHub
+commit that adds the pre-commit API. Remove separate `jido_action` and
+`jido_signal` dependencies. If your application declares `jido` directly,
+use the same pin while testing this branch.
 
 ## Prefer domain code interfaces
 

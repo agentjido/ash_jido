@@ -26,6 +26,7 @@ defmodule AshJido.Test.Domain do
     expose(:get_user)
     expose(:list_users, filters: [:email, :active], sorts: [:name], pagination: [type: :offset, max_page_size: 50])
     expose(:double_value)
+    action(:get_user, AshJido.Test.User, :read, name: "lookup_users")
   end
 
   # Make this domain accessible for testing
