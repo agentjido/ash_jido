@@ -8,4 +8,5 @@ config :git_ops,
   repository_url: "https://github.com/agentjido/ash_jido",
   manage_mix_version?: true,
   github_handle_lookup?: false,
+  version_source: :tags,
   version_tag_prefix: "v"

@@ -1,7 +1,7 @@
 defmodule AshJido.MixProject do
   use Mix.Project
 
-  @version "1.0.1"
+  @version "1.0.2"
   @source_url "https://github.com/agentjido/ash_jido"
   @description "Integration between the Ash Framework and the Jido Agent ecosystem."
 
